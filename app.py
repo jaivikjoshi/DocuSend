@@ -28,21 +28,74 @@ DOCUSEND_CSS = """
     --warning: #C98A05;
 }
 
+html {
+    color-scheme: light;
+}
+
 body,
 .gradio-container {
     background: var(--surface) !important;
     color: var(--ink) !important;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size: 15px !important;
+    letter-spacing: 0 !important;
 }
 
 .gradio-container {
     max-width: none !important;
+    --body-background-fill: var(--surface);
+    --body-text-color: var(--ink);
+    --body-text-color-subdued: var(--muted);
+    --block-background-fill: var(--surface);
+    --block-border-color: var(--line);
+    --block-info-text-color: var(--ink);
+    --block-label-text-color: var(--ink);
+    --button-primary-background-fill: var(--pine);
+    --button-primary-background-fill-hover: #214B3D;
+    --button-primary-text-color: #FFFFFF;
+    --button-secondary-background-fill: #FFFFFF;
+    --button-secondary-text-color: var(--ink);
+    --button-secondary-border-color: var(--line);
+    --input-background-fill: #FFFFFF;
+    --input-border-color: var(--line);
+}
+
+.gradio-container *,
+.gradio-container h1,
+.gradio-container h2,
+.gradio-container h3,
+.gradio-container p,
+.gradio-container label,
+.gradio-container table,
+.gradio-container th,
+.gradio-container td {
+    color: var(--ink) !important;
+    font-family: inherit !important;
+    letter-spacing: 0 !important;
+}
+
+.docs-muted,
+.topbar p,
+.feature-item span,
+.action-card span,
+.summary-note,
+.dashboard-table .empty-state {
+    color: var(--muted) !important;
 }
 
 button.primary,
 .primary {
     background: var(--pine) !important;
     border-color: var(--pine) !important;
+    color: white !important;
+}
+
+button.primary *,
+.primary *,
+.brand-mark,
+.brand-mark *,
+.avatar,
+.avatar * {
     color: white !important;
 }
 
