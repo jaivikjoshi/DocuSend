@@ -60,6 +60,217 @@ button.secondary {
 .docs-muted {
     color: var(--muted);
 }
+
+.app-shell {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.sidebar {
+    border-right: 1px solid var(--line);
+    padding: 32px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    min-height: 100vh;
+    background: rgba(246, 250, 248, 0.55);
+}
+
+.sidebar-wrap {
+    padding: 0 !important;
+}
+
+.brand {
+    align-items: center;
+    display: flex;
+    gap: 14px;
+    font-size: 28px;
+    font-weight: 750;
+    letter-spacing: 0;
+}
+
+.brand-mark {
+    align-items: center;
+    background: var(--pine);
+    border-radius: 7px;
+    color: white;
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.nav-stack {
+    display: grid;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.nav-item {
+    align-items: center;
+    border-radius: 8px;
+    color: var(--ink);
+    display: flex;
+    gap: 14px;
+    padding: 14px 18px;
+}
+
+.nav-item.active {
+    background: #EAF3EF;
+    color: var(--pine);
+    font-weight: 700;
+}
+
+.usage-card {
+    margin-top: auto;
+    padding: 18px;
+}
+
+.usage-meter {
+    background: #E6EBE9;
+    border-radius: 999px;
+    height: 9px;
+    margin: 14px 0 18px;
+    overflow: hidden;
+}
+
+.usage-meter span {
+    background: var(--pine);
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+    width: 36%;
+}
+
+.profile-chip {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.avatar {
+    align-items: center;
+    background: var(--ink);
+    border-radius: 999px;
+    color: white;
+    display: inline-flex;
+    font-size: 13px;
+    font-weight: 800;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+}
+
+.main-panel {
+    padding: 30px 30px 38px;
+}
+
+.topbar {
+    align-items: start;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+}
+
+.topbar h1 {
+    font-size: 30px;
+    line-height: 1.1;
+    margin: 0 0 8px;
+}
+
+.topbar p {
+    color: var(--muted);
+    font-size: 16px;
+    margin: 0;
+}
+
+.top-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.ghost-action {
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    display: inline-flex;
+    font-weight: 700;
+    gap: 10px;
+    padding: 12px 18px;
+}
+
+.upload-card {
+    padding: 28px;
+}
+
+.upload-grid {
+    align-items: stretch;
+    display: grid;
+    gap: 28px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+}
+
+.upload-card h2 {
+    font-size: 19px;
+    margin: 0 0 14px;
+}
+
+.feature-panel {
+    background: var(--soft);
+    border-radius: 8px;
+    display: grid;
+    gap: 30px;
+    padding: 34px;
+}
+
+.feature-item {
+    align-items: center;
+    display: grid;
+    gap: 8px 20px;
+    grid-template-columns: 40px 1fr;
+}
+
+.feature-icon {
+    color: var(--pine);
+    font-size: 27px;
+    grid-row: span 2;
+}
+
+.feature-item strong {
+    font-size: 16px;
+}
+
+.feature-item span {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+#upload-zone {
+    border: 1.5px dashed #CBD8D3 !important;
+    border-radius: 8px !important;
+    min-height: 270px;
+}
+
+#upload-zone .wrap {
+    min-height: 240px;
+}
+
+@media (max-width: 980px) {
+    .app-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        min-height: auto;
+    }
+
+    .upload-grid {
+        grid-template-columns: 1fr;
+    }
+}
 """
 
 
@@ -69,6 +280,75 @@ def _empty_documents_df() -> pd.DataFrame:
 
 def _empty_line_items_df() -> pd.DataFrame:
     return pd.DataFrame(columns=LINE_ITEM_COLUMNS)
+
+
+def _sidebar_html() -> str:
+    return """
+    <aside class="sidebar">
+        <div>
+            <div class="brand"><span class="brand-mark">▱</span><span>DocuSend</span></div>
+            <nav class="nav-stack">
+                <div class="nav-item active">⌂ <span>Dashboard</span></div>
+                <div class="nav-item">□ <span>Documents</span></div>
+                <div class="nav-item">⇧ <span>Exports</span></div>
+                <div class="nav-item">⚙ <span>Settings</span></div>
+            </nav>
+        </div>
+        <div>
+            <div class="docs-card usage-card">
+                <div class="docs-muted">Monthly usage</div>
+                <div style="font-size: 28px; font-weight: 750; margin-top: 8px;">128 <span class="docs-muted" style="font-size: 16px; font-weight: 500;">/ 500</span></div>
+                <div class="docs-muted" style="font-size: 13px;">documents</div>
+                <div class="usage-meter"><span></span></div>
+                <div class="ghost-action" style="justify-content: center; width: 100%;">↗ Upgrade Plan</div>
+            </div>
+            <div class="profile-chip">
+                <span class="avatar">JD</span>
+                <div>
+                    <strong>Jane Doe</strong>
+                    <div class="docs-muted" style="font-size: 13px;">janedoe@email.com</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    """
+
+
+def _header_html() -> str:
+    return """
+    <div class="topbar">
+        <div>
+            <h1>Dashboard</h1>
+            <p>Extract. Review. Export.</p>
+        </div>
+        <div class="top-actions">
+            <div class="ghost-action">□ Try an example</div>
+            <div class="ghost-action">?</div>
+        </div>
+    </div>
+    """
+
+
+def _feature_panel_html() -> str:
+    return """
+    <section class="feature-panel">
+        <div class="feature-item">
+            <div class="feature-icon">◎</div>
+            <strong>Accurate extraction</strong>
+            <span>OCR + AI to extract structured data</span>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">♢</div>
+            <strong>Review with confidence</strong>
+            <span>Edit and validate extracted fields</span>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">⇩</div>
+            <strong>Export anywhere</strong>
+            <span>Download as JSON or CSV</span>
+        </div>
+    </section>
+    """
 
 
 def _warning_markdown(documents: List[ExtractedDocument]) -> str:
@@ -209,56 +489,64 @@ def revalidate_edited(document_rows, line_item_rows, current_documents):
     return _tables_and_exports(documents)
 
 
-with gr.Blocks(title="DocuSend") as demo:
-    gr.Markdown(
-        """
-        # DocuSend
-        """
-    )
-
+with gr.Blocks(title="DocuSend", css=DOCUSEND_CSS) as demo:
     document_state = gr.State([])
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            files_input = gr.Files(
-                label="Receipts / Invoices",
-                file_count="multiple",
-                file_types=[".jpg", ".jpeg", ".png", ".pdf"],
-                type="filepath",
-            )
-            with gr.Row():
-                extract_button = gr.Button("Extract", variant="primary")
-                revalidate_button = gr.Button("Revalidate Edits")
+    with gr.Row(elem_classes=["app-shell"]):
+        with gr.Column(scale=0, min_width=280, elem_classes=["sidebar-wrap"]):
+            gr.HTML(_sidebar_html())
 
-            json_download = gr.File(label="Download JSON")
-            csv_download = gr.File(label="Download CSV ZIP")
+        with gr.Column(scale=1, elem_classes=["main-panel"]):
+            gr.HTML(_header_html())
 
-        with gr.Column(scale=2):
+            with gr.Column(elem_classes=["docs-card", "upload-card"]):
+                with gr.Row(elem_classes=["upload-grid"]):
+                    with gr.Column(scale=2):
+                        gr.HTML("<h2>Upload receipts or invoices</h2>")
+                        files_input = gr.Files(
+                            label="Receipts / Invoices",
+                            file_count="multiple",
+                            file_types=[".jpg", ".jpeg", ".png", ".pdf"],
+                            type="filepath",
+                            elem_id="upload-zone",
+                        )
+                        with gr.Row():
+                            extract_button = gr.Button("Extract", variant="primary")
+                            revalidate_button = gr.Button("Revalidate Edits")
+                    with gr.Column(scale=1):
+                        gr.HTML(_feature_panel_html())
+
+            gr.HTML('<div style="height: 28px;"></div>')
+
             documents_table = gr.Dataframe(
                 value=_empty_documents_df(),
                 headers=EDITABLE_DOCUMENT_COLUMNS,
                 datatype=["str"] * len(EDITABLE_DOCUMENT_COLUMNS),
-                label="Editable Document Fields",
+                label="Recent documents",
                 interactive=True,
                 wrap=True,
             )
 
-    with gr.Tabs():
-        with gr.Tab("Line Items"):
-            line_items_table = gr.Dataframe(
-                value=_empty_line_items_df(),
-                headers=LINE_ITEM_COLUMNS,
-                datatype=["str"] * len(LINE_ITEM_COLUMNS),
-                label="Editable Line Items",
-                interactive=True,
-                wrap=True,
-            )
-        with gr.Tab("Warnings"):
-            warnings_output = gr.Markdown("No documents processed yet.")
-        with gr.Tab("Raw OCR Text"):
-            raw_text_output = gr.Textbox(label="Raw OCR Text", lines=18, interactive=False)
-        with gr.Tab("JSON Preview"):
-            json_preview = gr.JSON(label="Structured Output")
+            with gr.Tabs():
+                with gr.Tab("Line Items"):
+                    line_items_table = gr.Dataframe(
+                        value=_empty_line_items_df(),
+                        headers=LINE_ITEM_COLUMNS,
+                        datatype=["str"] * len(LINE_ITEM_COLUMNS),
+                        label="Editable Line Items",
+                        interactive=True,
+                        wrap=True,
+                    )
+                with gr.Tab("Warnings"):
+                    warnings_output = gr.Markdown("No documents processed yet.")
+                with gr.Tab("Raw OCR Text"):
+                    raw_text_output = gr.Textbox(label="Raw OCR Text", lines=18, interactive=False)
+                with gr.Tab("JSON Preview"):
+                    json_preview = gr.JSON(label="Structured Output")
+                with gr.Tab("Exports"):
+                    with gr.Row():
+                        json_download = gr.File(label="Download JSON")
+                        csv_download = gr.File(label="Download CSV ZIP")
 
     extract_button.click(
         process_files,
