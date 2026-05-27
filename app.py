@@ -85,6 +85,12 @@ html {
     color-scheme: light;
 }
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 body,
 .gradio-container {
     background: var(--surface) !important;
@@ -94,8 +100,14 @@ body,
     letter-spacing: 0 !important;
 }
 
+body {
+    margin: 0 !important;
+    overflow-x: hidden;
+}
+
 .gradio-container {
     max-width: none !important;
+    padding: 0 !important;
     --body-background-fill: var(--surface);
     --body-text-color: var(--ink);
     --body-text-color-subdued: var(--muted);
@@ -111,6 +123,10 @@ body,
     --button-secondary-border-color: var(--line);
     --input-background-fill: #FFFFFF;
     --input-border-color: var(--line);
+}
+
+.gradio-container .main.fillable.app {
+    padding: 0 !important;
 }
 
 .gradio-container *,
@@ -178,14 +194,15 @@ button.secondary {
 
 .app-shell {
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 0 !important;
+    grid-template-columns: 250px minmax(0, 1fr);
     min-height: 100vh;
     width: 100%;
 }
 
 .sidebar {
     border-right: 1px solid var(--line);
-    padding: 32px 22px;
+    padding: 40px 19px 32px;
     display: flex;
     flex-direction: column;
     gap: 28px;
@@ -201,7 +218,7 @@ button.secondary {
     align-items: center;
     display: flex;
     gap: 14px;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 750;
     letter-spacing: 0;
 }
@@ -220,7 +237,7 @@ button.secondary {
 .nav-stack {
     display: grid;
     gap: 10px;
-    margin-top: 22px;
+    margin-top: 56px;
 }
 
 .nav-item {
@@ -240,7 +257,7 @@ button.secondary {
 
 .usage-card {
     margin-top: auto;
-    padding: 18px;
+    padding: 18px 16px;
 }
 
 .usage-meter {
@@ -280,7 +297,8 @@ button.secondary {
 }
 
 .main-panel {
-    padding: 30px 34px 40px;
+    gap: 8px !important;
+    padding: 22px 30px 36px;
     min-width: 0;
 }
 
@@ -288,7 +306,7 @@ button.secondary {
     align-items: start;
     display: flex;
     justify-content: space-between;
-    margin-bottom: 30px;
+    margin-bottom: 34px;
 }
 
 .topbar h1 {
@@ -322,24 +340,30 @@ button.secondary {
 }
 
 .upload-card {
-    padding: 28px 28px 30px;
+    padding: 24px 24px 28px;
+}
+
+.upload-card .column,
+.upload-card .gap,
+.upload-card .form {
+    gap: 12px !important;
 }
 
 .upload-grid {
     align-items: stretch;
     display: grid;
-    gap: 28px;
-    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+    gap: 42px;
+    grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.96fr);
 }
 
 .upload-card h2 {
     font-size: 19px;
     font-weight: 750;
-    margin: 0 0 14px;
+    margin: 0 0 16px;
 }
 
 .upload-stack {
-    min-height: 270px;
+    min-height: 245px;
     position: relative;
 }
 
@@ -347,19 +371,20 @@ button.secondary {
     align-items: center;
     border: 1.5px dashed #CBD8D3;
     border-radius: 8px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 270px;
-    padding: 28px;
+    min-height: 245px;
+    padding: 22px;
     text-align: center;
 }
 
 .upload-arrow {
     color: var(--pine) !important;
-    font-size: 56px;
+    font-size: 48px;
     line-height: 1;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
 }
 
 .upload-copy {
@@ -370,7 +395,7 @@ button.secondary {
 .upload-or {
     color: var(--muted) !important;
     font-size: 14px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .choose-files-pill {
@@ -381,9 +406,9 @@ button.secondary {
     font-size: 15px;
     font-weight: 700;
     justify-content: center;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     min-width: 150px;
-    padding: 12px 24px;
+    padding: 10px 24px;
 }
 
 .upload-support {
@@ -393,7 +418,7 @@ button.secondary {
 
 .section-title {
     font-size: 18px;
-    margin: 0 0 16px;
+    margin: 34px 0 18px;
 }
 
 .recent-card {
@@ -480,6 +505,11 @@ button.secondary {
 .quick-actions,
 .summary-card {
     padding: 22px;
+}
+
+.quick-actions .section-title,
+.summary-card .section-title {
+    margin-top: 0;
 }
 
 .action-grid {
@@ -571,8 +601,8 @@ button.secondary {
 
 #upload-zone {
     inset: 0;
-    min-height: 270px !important;
-    opacity: 0.01;
+    min-height: 245px !important;
+    opacity: 0;
     position: absolute !important;
     z-index: 5;
 }
@@ -585,7 +615,7 @@ button.secondary {
 #upload-zone [data-testid="file-upload"] {
     cursor: pointer !important;
     height: 100% !important;
-    min-height: 270px !important;
+    min-height: 245px !important;
     width: 100% !important;
 }
 
@@ -604,6 +634,10 @@ button.secondary {
     font-size: 15px !important;
     font-weight: 750 !important;
     min-height: 44px !important;
+}
+
+.hidden-actions {
+    display: none !important;
 }
 
 @media (max-width: 1180px) {
@@ -1178,7 +1212,7 @@ with gr.Blocks(title="DocuSend") as demo:
                                 type="filepath",
                                 elem_id="upload-zone",
                             )
-                        with gr.Row():
+                        with gr.Row(elem_classes=["hidden-actions"]):
                             extract_button = gr.Button("Extract", variant="primary")
                             revalidate_button = gr.Button("Revalidate Edits")
                     with gr.Column(scale=1):
@@ -1223,6 +1257,23 @@ with gr.Blocks(title="DocuSend") as demo:
                         csv_download = gr.File(label="Download CSV ZIP")
 
     extract_button.click(
+        process_files,
+        inputs=[files_input],
+        outputs=[
+            document_state,
+            recent_documents,
+            summary_panel,
+            documents_table,
+            line_items_table,
+            warnings_output,
+            raw_text_output,
+            json_preview,
+            json_download,
+            csv_download,
+        ],
+    )
+
+    files_input.change(
         process_files,
         inputs=[files_input],
         outputs=[
