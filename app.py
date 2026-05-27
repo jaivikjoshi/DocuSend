@@ -14,6 +14,54 @@ from src.validation import validate_document
 
 MAX_BATCH_FILES = 20
 
+DOCUSEND_CSS = """
+:root {
+    --ink: #091413;
+    --pine: #285A48;
+    --sage: #408A71;
+    --mint: #B0E4CC;
+    --surface: #FFFFFF;
+    --soft: #F6FAF8;
+    --line: #E4EBE8;
+    --muted: #60706C;
+    --warning: #C98A05;
+}
+
+body,
+.gradio-container {
+    background: var(--surface) !important;
+    color: var(--ink) !important;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+.gradio-container {
+    max-width: none !important;
+}
+
+button.primary,
+.primary {
+    background: var(--pine) !important;
+    border-color: var(--pine) !important;
+    color: white !important;
+}
+
+button.secondary {
+    border-color: var(--line) !important;
+    color: var(--ink) !important;
+}
+
+.docs-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(9, 20, 19, 0.06);
+}
+
+.docs-muted {
+    color: var(--muted);
+}
+"""
+
 
 def _empty_documents_df() -> pd.DataFrame:
     return pd.DataFrame(columns=EDITABLE_DOCUMENT_COLUMNS)
