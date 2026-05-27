@@ -127,6 +127,7 @@ button.secondary {
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     min-height: 100vh;
+    width: 100%;
 }
 
 .sidebar {
@@ -227,6 +228,7 @@ button.secondary {
 
 .main-panel {
     padding: 30px 34px 40px;
+    min-width: 0;
 }
 
 .topbar {
@@ -251,6 +253,8 @@ button.secondary {
 .top-actions {
     display: flex;
     gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .ghost-action {
@@ -287,11 +291,13 @@ button.secondary {
 }
 
 .recent-card {
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .dashboard-table {
     border-collapse: collapse;
+    min-width: 860px;
     width: 100%;
 }
 
@@ -520,23 +526,152 @@ button.secondary {
     min-height: 44px !important;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
+    .main-panel {
+        padding: 26px;
+    }
+
+    .upload-grid {
+        gap: 22px;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+    }
+
+    .feature-panel {
+        padding: 28px;
+    }
+
+    .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 920px) {
     .app-shell {
         grid-template-columns: 1fr;
     }
 
     .sidebar {
+        border-bottom: 1px solid var(--line);
+        border-right: 0;
+        gap: 18px;
         min-height: auto;
+        padding: 22px;
+    }
+
+    .sidebar > div:first-child {
+        align-items: center;
+        display: flex;
+        gap: 18px;
+        justify-content: space-between;
+    }
+
+    .brand {
+        font-size: 24px;
+    }
+
+    .nav-stack {
+        grid-template-columns: repeat(4, minmax(96px, 1fr));
+        margin-top: 0;
+        overflow-x: auto;
+    }
+
+    .nav-item {
+        justify-content: center;
+        padding: 12px 14px;
     }
 
     .upload-grid {
         grid-template-columns: 1fr;
     }
 
-    .lower-grid,
+    .lower-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 700px) {
+    .main-panel {
+        padding: 20px 16px 28px;
+    }
+
+    .topbar {
+        gap: 18px;
+        flex-direction: column;
+    }
+
+    .topbar h1 {
+        font-size: 28px;
+    }
+
+    .top-actions {
+        justify-content: stretch;
+        width: 100%;
+    }
+
+    .ghost-action {
+        justify-content: center;
+        padding: 11px 14px;
+    }
+
+    .upload-card {
+        padding: 20px;
+    }
+
+    #upload-zone,
+    #upload-zone .wrap {
+        min-height: 220px;
+    }
+
+    .feature-panel {
+        gap: 22px;
+        padding: 22px;
+    }
+
+    .feature-item {
+        grid-template-columns: 32px 1fr;
+    }
+
     .summary-grid,
     .action-grid {
         grid-template-columns: 1fr;
+    }
+
+    .dashboard-table {
+        min-width: 760px;
+    }
+}
+
+@media (max-width: 520px) {
+    .sidebar {
+        padding: 18px 16px;
+    }
+
+    .sidebar > div:first-child {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .nav-stack {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .usage-card,
+    .profile-chip {
+        display: none;
+    }
+
+    .brand-mark {
+        height: 32px;
+        width: 32px;
+    }
+
+    .top-actions {
+        display: grid;
+        grid-template-columns: 1fr auto;
+    }
+
+    .upload-card button {
+        width: 100% !important;
     }
 }
 """
