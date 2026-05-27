@@ -285,6 +285,59 @@ button.secondary {
     margin: 0 0 14px;
 }
 
+.upload-stack {
+    min-height: 270px;
+    position: relative;
+}
+
+.upload-dropzone {
+    align-items: center;
+    border: 1.5px dashed #CBD8D3;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 270px;
+    padding: 28px;
+    text-align: center;
+}
+
+.upload-arrow {
+    color: var(--pine) !important;
+    font-size: 56px;
+    line-height: 1;
+    margin-bottom: 18px;
+}
+
+.upload-copy {
+    font-size: 15px;
+    margin-bottom: 10px;
+}
+
+.upload-or {
+    color: var(--muted) !important;
+    font-size: 14px;
+    margin-bottom: 14px;
+}
+
+.choose-files-pill {
+    background: var(--pine);
+    border-radius: 7px;
+    color: #FFFFFF !important;
+    display: inline-flex;
+    font-size: 15px;
+    font-weight: 700;
+    justify-content: center;
+    margin-bottom: 24px;
+    min-width: 150px;
+    padding: 12px 24px;
+}
+
+.upload-support {
+    color: var(--muted) !important;
+    font-size: 14px;
+}
+
 .section-title {
     font-size: 18px;
     margin: 0 0 16px;
@@ -463,55 +516,29 @@ button.secondary {
     font-size: 14px;
 }
 
+#upload-zone {
+    inset: 0;
+    min-height: 270px !important;
+    opacity: 0.01;
+    position: absolute !important;
+    z-index: 5;
+}
+
 #upload-zone,
 #upload-zone > div,
 #upload-zone .wrap,
 #upload-zone label,
 #upload-zone .file-preview,
 #upload-zone [data-testid="file-upload"] {
-    background: #FFFFFF !important;
-    color: var(--ink) !important;
+    cursor: pointer !important;
+    height: 100% !important;
+    min-height: 270px !important;
+    width: 100% !important;
 }
 
-#upload-zone {
-    border: 1.5px dashed #CBD8D3 !important;
-    border-radius: 8px !important;
-    min-height: 270px;
-    overflow: hidden;
-}
-
-#upload-zone .wrap {
-    min-height: 240px;
-    align-items: center !important;
-    border: 0 !important;
-    display: flex !important;
-    justify-content: center !important;
-    padding: 24px !important;
-}
-
-#upload-zone svg,
-#upload-zone .icon {
-    color: var(--pine) !important;
-    stroke: var(--pine) !important;
-}
-
-#upload-zone p,
-#upload-zone span,
-#upload-zone button {
-    color: var(--ink) !important;
-}
-
-#upload-zone button {
-    background: var(--pine) !important;
-    border: 0 !important;
-    border-radius: 7px !important;
-    color: #FFFFFF !important;
-    min-height: 44px !important;
-    padding: 0 26px !important;
-}
-
-#upload-zone button * {
-    color: #FFFFFF !important;
+#upload-zone + .wrap,
+#upload-zone .block-info {
+    display: none !important;
 }
 
 .upload-card > .gap,
@@ -618,7 +645,9 @@ button.secondary {
     }
 
     #upload-zone,
-    #upload-zone .wrap {
+    #upload-zone .wrap,
+    .upload-stack,
+    .upload-dropzone {
         min-height: 220px;
     }
 
@@ -751,6 +780,18 @@ def _feature_panel_html() -> str:
             <span>Download as JSON or CSV</span>
         </div>
     </section>
+    """
+
+
+def _upload_dropzone_html() -> str:
+    return """
+    <div class="upload-dropzone">
+        <div class="upload-arrow">⇧</div>
+        <div class="upload-copy">Drag and drop files here</div>
+        <div class="upload-or">or</div>
+        <div class="choose-files-pill">Choose files</div>
+        <div class="upload-support">Supports JPG, PNG, PDF (Max 20 files, 20MB each)</div>
+    </div>
     """
 
 
@@ -1042,14 +1083,16 @@ with gr.Blocks(title="DocuSend") as demo:
                 with gr.Row(elem_classes=["upload-grid"]):
                     with gr.Column(scale=2):
                         gr.HTML("<h2>Upload receipts or invoices</h2>")
-                        files_input = gr.Files(
-                            label="",
-                            show_label=False,
-                            file_count="multiple",
-                            file_types=[".jpg", ".jpeg", ".png", ".pdf"],
-                            type="filepath",
-                            elem_id="upload-zone",
-                        )
+                        with gr.Column(elem_classes=["upload-stack"]):
+                            gr.HTML(_upload_dropzone_html())
+                            files_input = gr.Files(
+                                label="",
+                                show_label=False,
+                                file_count="multiple",
+                                file_types=[".jpg", ".jpeg", ".png", ".pdf"],
+                                type="filepath",
+                                elem_id="upload-zone",
+                            )
                         with gr.Row():
                             extract_button = gr.Button("Extract", variant="primary")
                             revalidate_button = gr.Button("Revalidate Edits")
