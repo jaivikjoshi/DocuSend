@@ -1,4 +1,5 @@
 from pathlib import Path
+from html import escape
 from typing import List, Optional
 
 import gradio as gr
@@ -218,6 +219,152 @@ button.secondary {
     margin: 0 0 14px;
 }
 
+.section-title {
+    font-size: 18px;
+    margin: 0 0 16px;
+}
+
+.recent-card {
+    overflow: hidden;
+}
+
+.dashboard-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+    padding: 13px 18px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.dashboard-table th {
+    color: #31413D;
+    font-size: 13px;
+    font-weight: 650;
+    background: #FBFCFC;
+}
+
+.dashboard-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.badge {
+    border-radius: 7px;
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 10px;
+}
+
+.badge.green {
+    background: #E8F4EE;
+    color: var(--pine);
+}
+
+.badge.amber {
+    background: #FFF4DB;
+    color: var(--warning);
+}
+
+.confidence-cell {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+}
+
+.confidence-track {
+    background: #E5E9E7;
+    border-radius: 999px;
+    height: 7px;
+    overflow: hidden;
+    width: 72px;
+}
+
+.confidence-fill {
+    background: var(--sage);
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+}
+
+.confidence-fill.review {
+    background: #D9A500;
+}
+
+.lower-grid {
+    display: grid;
+    gap: 22px;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    margin-top: 22px;
+}
+
+.quick-actions,
+.summary-card {
+    padding: 22px;
+}
+
+.action-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.action-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+}
+
+.action-icon {
+    color: var(--pine);
+    font-size: 28px;
+    margin-bottom: 16px;
+}
+
+.action-card strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 6px;
+}
+
+.action-card span {
+    color: var(--muted);
+    display: block;
+    font-size: 13px;
+}
+
+.summary-grid {
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 22px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding-top: 22px;
+}
+
+.summary-number {
+    color: var(--pine);
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 12px;
+}
+
+.summary-label {
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.summary-note {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 6px;
+}
+
 .feature-panel {
     background: var(--soft);
     border-radius: 8px;
@@ -268,6 +415,12 @@ button.secondary {
     }
 
     .upload-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .lower-grid,
+    .summary-grid,
+    .action-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -351,6 +504,138 @@ def _feature_panel_html() -> str:
     """
 
 
+def _money(value: Optional[float], currency: str) -> str:
+    if value is None:
+        return "—"
+    symbol = "$" if currency in {"USD", "CAD", "AUD", "NZD"} else ""
+    return f"{symbol}{value:,.2f}"
+
+
+def _recent_documents_html(documents: List[ExtractedDocument]) -> str:
+    rows = []
+    for document in documents:
+        warning_count = len(document.warnings)
+        needs_review = warning_count > 0 or document.confidence < 75
+        status_class = "amber" if needs_review else "green"
+        status_label = "Review" if needs_review else "Processed"
+        confidence_class = "review" if needs_review else ""
+        type_label = document.document_type.title() if document.document_type != "unknown" else "Document"
+        confidence_width = max(0, min(100, int(document.confidence)))
+
+        rows.append(
+            f"""
+            <tr>
+                <td>□ {escape(document.file_name)}</td>
+                <td><span class="badge green">{escape(type_label)}</span></td>
+                <td>{escape(document.date or "—")}</td>
+                <td>{escape(document.vendor or "—")}</td>
+                <td>{escape(_money(document.total, document.currency))}</td>
+                <td><span class="badge {status_class}">{status_label}</span></td>
+                <td>
+                    <div class="confidence-cell">
+                        <span>{document.confidence:.0f}%</span>
+                        <span class="confidence-track"><span class="confidence-fill {confidence_class}" style="width: {confidence_width}%"></span></span>
+                    </div>
+                </td>
+                <td>{'⚠ ' if warning_count else ''}{warning_count}</td>
+                <td>›</td>
+            </tr>
+            """
+        )
+
+    if not rows:
+        rows.append(
+            """
+            <tr>
+                <td colspan="9" style="padding: 28px 18px; color: var(--muted);">Upload receipts or invoices to populate this dashboard.</td>
+            </tr>
+            """
+        )
+
+    return f"""
+    <h2 class="section-title">Recent documents</h2>
+    <section class="docs-card recent-card">
+        <table class="dashboard-table">
+            <thead>
+                <tr>
+                    <th>File name</th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>Vendor</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Confidence</th>
+                    <th>Warnings</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>{''.join(rows)}</tbody>
+        </table>
+    </section>
+    """
+
+
+def _quick_actions_html() -> str:
+    return """
+    <section class="docs-card quick-actions">
+        <h2 class="section-title">Quick actions</h2>
+        <div class="action-grid">
+            <div class="action-card">
+                <div class="action-icon">□</div>
+                <strong>Export JSON</strong>
+                <span>Download all data</span>
+            </div>
+            <div class="action-card">
+                <div class="action-icon">▤</div>
+                <strong>Export CSV</strong>
+                <span>Documents & line items</span>
+            </div>
+            <div class="action-card">
+                <div class="action-icon">♢</div>
+                <strong>Revalidate all</strong>
+                <span>Check for issues</span>
+            </div>
+        </div>
+    </section>
+    """
+
+
+def _summary_html(documents: List[ExtractedDocument]) -> str:
+    count = len(documents)
+    warning_count = sum(len(document.warnings) for document in documents)
+    success_count = sum(1 for document in documents if document.status == "processed" and document.total is not None)
+    success_rate = round((success_count / count) * 100) if count else 0
+    avg_confidence = round(sum(document.confidence for document in documents) / count) if count else 0
+
+    return f"""
+    <section class="docs-card summary-card">
+        <h2 class="section-title">Extraction summary</h2>
+        <div class="summary-grid">
+            <div>
+                <div class="summary-number">{count}</div>
+                <div class="summary-label">Documents</div>
+                <div class="summary-note">This batch</div>
+            </div>
+            <div>
+                <div class="summary-number">{success_rate}%</div>
+                <div class="summary-label">Success rate</div>
+                <div class="summary-note">With detected total</div>
+            </div>
+            <div>
+                <div class="summary-number">{warning_count}</div>
+                <div class="summary-label">Warnings</div>
+                <div class="summary-note">Require review</div>
+            </div>
+            <div>
+                <div class="summary-number">{avg_confidence}%</div>
+                <div class="summary-label">Avg. confidence</div>
+                <div class="summary-note">Current batch</div>
+            </div>
+        </div>
+    </section>
+    """
+
+
 def _warning_markdown(documents: List[ExtractedDocument]) -> str:
     if not documents:
         return "No documents processed yet."
@@ -392,6 +677,8 @@ def _tables_and_exports(documents: List[ExtractedDocument]):
     json_path, csv_zip_path = write_export_files(documents)
     return (
         documents,
+        _recent_documents_html(documents),
+        _summary_html(documents),
         pd.DataFrame(documents_to_rows(documents), columns=EDITABLE_DOCUMENT_COLUMNS),
         pd.DataFrame(line_items_to_rows(documents), columns=LINE_ITEM_COLUMNS),
         _warning_markdown(documents),
@@ -406,6 +693,8 @@ def process_files(files: Optional[List[str]]):
     if not files:
         return (
             [],
+            _recent_documents_html([]),
+            _summary_html([]),
             _empty_documents_df(),
             _empty_line_items_df(),
             "Upload at least one receipt or invoice to start.",
@@ -489,7 +778,7 @@ def revalidate_edited(document_rows, line_item_rows, current_documents):
     return _tables_and_exports(documents)
 
 
-with gr.Blocks(title="DocuSend", css=DOCUSEND_CSS) as demo:
+with gr.Blocks(title="DocuSend") as demo:
     document_state = gr.State([])
 
     with gr.Row(elem_classes=["app-shell"]):
@@ -518,16 +807,22 @@ with gr.Blocks(title="DocuSend", css=DOCUSEND_CSS) as demo:
 
             gr.HTML('<div style="height: 28px;"></div>')
 
-            documents_table = gr.Dataframe(
-                value=_empty_documents_df(),
-                headers=EDITABLE_DOCUMENT_COLUMNS,
-                datatype=["str"] * len(EDITABLE_DOCUMENT_COLUMNS),
-                label="Recent documents",
-                interactive=True,
-                wrap=True,
-            )
+            recent_documents = gr.HTML(_recent_documents_html([]))
+
+            with gr.Row(elem_classes=["lower-grid"]):
+                gr.HTML(_quick_actions_html())
+                summary_panel = gr.HTML(_summary_html([]))
 
             with gr.Tabs():
+                with gr.Tab("Review Fields"):
+                    documents_table = gr.Dataframe(
+                        value=_empty_documents_df(),
+                        headers=EDITABLE_DOCUMENT_COLUMNS,
+                        datatype=["str"] * len(EDITABLE_DOCUMENT_COLUMNS),
+                        label="Editable document fields",
+                        interactive=True,
+                        wrap=True,
+                    )
                 with gr.Tab("Line Items"):
                     line_items_table = gr.Dataframe(
                         value=_empty_line_items_df(),
@@ -553,6 +848,8 @@ with gr.Blocks(title="DocuSend", css=DOCUSEND_CSS) as demo:
         inputs=[files_input],
         outputs=[
             document_state,
+            recent_documents,
+            summary_panel,
             documents_table,
             line_items_table,
             warnings_output,
@@ -568,6 +865,8 @@ with gr.Blocks(title="DocuSend", css=DOCUSEND_CSS) as demo:
         inputs=[documents_table, line_items_table, document_state],
         outputs=[
             document_state,
+            recent_documents,
+            summary_panel,
             documents_table,
             line_items_table,
             warnings_output,
@@ -580,4 +879,4 @@ with gr.Blocks(title="DocuSend", css=DOCUSEND_CSS) as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(css=DOCUSEND_CSS)
