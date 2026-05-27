@@ -111,6 +111,14 @@ button.secondary {
     box-shadow: 0 10px 28px rgba(9, 20, 19, 0.06);
 }
 
+.block,
+.form,
+.panel,
+.tabs {
+    background: transparent !important;
+    border-color: var(--line) !important;
+}
+
 .docs-muted {
     color: var(--muted);
 }
@@ -218,7 +226,7 @@ button.secondary {
 }
 
 .main-panel {
-    padding: 30px 30px 38px;
+    padding: 30px 34px 40px;
 }
 
 .topbar {
@@ -257,7 +265,7 @@ button.secondary {
 }
 
 .upload-card {
-    padding: 28px;
+    padding: 28px 28px 30px;
 }
 
 .upload-grid {
@@ -269,6 +277,7 @@ button.secondary {
 
 .upload-card h2 {
     font-size: 19px;
+    font-weight: 750;
     margin: 0 0 14px;
 }
 
@@ -448,14 +457,67 @@ button.secondary {
     font-size: 14px;
 }
 
+#upload-zone,
+#upload-zone > div,
+#upload-zone .wrap,
+#upload-zone label,
+#upload-zone .file-preview,
+#upload-zone [data-testid="file-upload"] {
+    background: #FFFFFF !important;
+    color: var(--ink) !important;
+}
+
 #upload-zone {
     border: 1.5px dashed #CBD8D3 !important;
     border-radius: 8px !important;
     min-height: 270px;
+    overflow: hidden;
 }
 
 #upload-zone .wrap {
     min-height: 240px;
+    align-items: center !important;
+    border: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    padding: 24px !important;
+}
+
+#upload-zone svg,
+#upload-zone .icon {
+    color: var(--pine) !important;
+    stroke: var(--pine) !important;
+}
+
+#upload-zone p,
+#upload-zone span,
+#upload-zone button {
+    color: var(--ink) !important;
+}
+
+#upload-zone button {
+    background: var(--pine) !important;
+    border: 0 !important;
+    border-radius: 7px !important;
+    color: #FFFFFF !important;
+    min-height: 44px !important;
+    padding: 0 26px !important;
+}
+
+#upload-zone button * {
+    color: #FFFFFF !important;
+}
+
+.upload-card > .gap,
+.upload-card .form {
+    gap: 16px !important;
+}
+
+.upload-card button {
+    border-radius: 7px !important;
+    font-size: 15px !important;
+    font-weight: 750 !important;
+    min-height: 44px !important;
 }
 
 @media (max-width: 980px) {
@@ -846,7 +908,8 @@ with gr.Blocks(title="DocuSend") as demo:
                     with gr.Column(scale=2):
                         gr.HTML("<h2>Upload receipts or invoices</h2>")
                         files_input = gr.Files(
-                            label="Receipts / Invoices",
+                            label="",
+                            show_label=False,
                             file_count="multiple",
                             file_types=[".jpg", ".jpeg", ".png", ".pdf"],
                             type="filepath",
