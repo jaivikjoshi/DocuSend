@@ -6,7 +6,7 @@ from typing import Iterable, List, Tuple
 
 import pandas as pd
 
-from .schema import ExtractedDocument
+from .schema import EDITABLE_DOCUMENT_COLUMNS, LINE_ITEM_COLUMNS, ExtractedDocument
 
 
 OUTPUT_DIR = Path("outputs")
@@ -66,8 +66,8 @@ def write_export_files(documents: List[ExtractedDocument]) -> Tuple[str, str]:
     payload = [document.model_dump(mode="json") for document in documents]
     json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    pd.DataFrame(documents_to_rows(documents)).to_csv(documents_csv_path, index=False)
-    pd.DataFrame(line_items_to_rows(documents)).to_csv(line_items_csv_path, index=False)
+    pd.DataFrame(documents_to_rows(documents), columns=EDITABLE_DOCUMENT_COLUMNS).to_csv(documents_csv_path, index=False)
+    pd.DataFrame(line_items_to_rows(documents), columns=LINE_ITEM_COLUMNS).to_csv(line_items_csv_path, index=False)
 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.write(documents_csv_path, arcname="documents.csv")

@@ -5,6 +5,7 @@ from .utils import KNOWN_CURRENCIES, safe_float
 
 
 TOTAL_TOLERANCE = 0.03
+LINE_ITEM_TOLERANCE = 0.05
 
 
 def _dedupe_warnings(warnings: Iterable[str]) -> List[str]:
@@ -28,6 +29,8 @@ def validate_document(document: ExtractedDocument) -> ExtractedDocument:
 
     if not document.raw_text.strip():
         warnings.append("No raw text was extracted from this document.")
+    if document.document_type == "unknown":
+        warnings.append("Document type could not be confidently detected.")
     if not document.vendor:
         warnings.append("Vendor could not be detected.")
     if not document.date:
@@ -56,6 +59,10 @@ def validate_document(document: ExtractedDocument) -> ExtractedDocument:
         if abs(expected - document.total) > TOTAL_TOLERANCE:
             warnings.append("Subtotal, tax, tip, and discount do not reconcile with total.")
 
+    line_item_total = sum(item.total for item in document.line_items if item.total is not None)
+    if document.line_items and document.subtotal is not None and abs(line_item_total - document.subtotal) > LINE_ITEM_TOLERANCE:
+        warnings.append("Line item totals do not reconcile with subtotal.")
+
     score = 0
     if document.vendor:
         score += 20
@@ -72,4 +79,6 @@ def validate_document(document: ExtractedDocument) -> ExtractedDocument:
 
     document.confidence = float(min(score, 100))
     document.warnings = _dedupe_warnings(warnings)
+    if document.status != "failed":
+        document.status = "review" if document.warnings else "processed"
     return document

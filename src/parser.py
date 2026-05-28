@@ -121,6 +121,52 @@ def _extract_line_items(lines: List[str]) -> List[LineItem]:
         if any(word in lower for word in label_words):
             continue
 
+        quantity_unit_match = re.search(
+            r"(.+?)\s+(\d+(?:\.\d+)?)\s*(?:x|@)\s*\$?\s*(\d+(?:\.\d{2}))\s+\$?\s*(\d+(?:\.\d{2}))\s*$",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if quantity_unit_match:
+            description = re.sub(r"\s{2,}", " ", quantity_unit_match.group(1)).strip(" -")
+            quantity = float(quantity_unit_match.group(2))
+            unit_price = float(quantity_unit_match.group(3))
+            total = float(quantity_unit_match.group(4))
+            confidence = 70.0 if abs((quantity * unit_price) - total) <= 0.03 else 55.0
+            if description and len(description) >= 3:
+                items.append(
+                    LineItem(
+                        description=description[:120],
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        total=round(total, 2),
+                        confidence=confidence,
+                    )
+                )
+                continue
+
+        columns_match = re.search(
+            r"(.+?)\s+(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d{2}))\s+\$?\s*(\d+(?:\.\d{2}))\s*$",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if columns_match:
+            description = re.sub(r"\s{2,}", " ", columns_match.group(1)).strip(" -")
+            quantity = float(columns_match.group(2))
+            unit_price = float(columns_match.group(3))
+            total = float(columns_match.group(4))
+            confidence = 65.0 if abs((quantity * unit_price) - total) <= 0.03 else 50.0
+            if description and len(description) >= 3:
+                items.append(
+                    LineItem(
+                        description=description[:120],
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        total=round(total, 2),
+                        confidence=confidence,
+                    )
+                )
+                continue
+
         match = re.search(r"(.+?)\s+(-?\$?\s?\d+(?:\.\d{2}))\s*$", line)
         if not match:
             continue
