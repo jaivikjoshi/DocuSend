@@ -7,13 +7,24 @@ Users upload receipt photos or invoice PDFs, review editable extracted fields, i
 ## Current Build Scope
 
 - Batch upload for JPG, PNG, and PDF files
-- OCR and PDF text extraction
+- OCR, selectable PDF text extraction, and scanned PDF OCR fallback
 - Rule-based extraction for vendor, date, invoice number, subtotal, tax, tip, discount, total, currency, and payment method
-- Draft line-item extraction
-- Validation warnings
+- Draft line-item extraction with quantity and unit-price support for common rows
+- Validation warnings and review status
 - Editable review tables
-- JSON and CSV export
+- JSON export and CSV ZIP export with document and line-item files
+- Example receipt/invoice files
 - Hugging Face Spaces-ready dependency files
+
+## Phase 2 Status
+
+Phase 2 is the useful MVP layer. It adds practical PDF handling, better line items, validation status, export reliability, and sample files for testing.
+
+Try these files in the app:
+
+- `examples/sample_receipt.png`
+- `examples/sample_invoice_scan.png`
+- `examples/sample_scanned_invoice.pdf`
 
 ## How It Works
 
@@ -32,6 +43,12 @@ python app.py
 ```
 
 For local OCR, install the Tesseract system package if it is not already available.
+
+## Test
+
+```bash
+python -m unittest
+```
 
 ## Privacy Note
 
