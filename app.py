@@ -69,6 +69,8 @@ SAMPLE_DASHBOARD_ROWS = [
 ]
 
 DOCUSEND_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;650;700;750;800&display=swap');
+
 :root {
     --ink: #091413;
     --pine: #285A48;
@@ -95,7 +97,7 @@ body,
 .gradio-container {
     background: var(--surface) !important;
     color: var(--ink) !important;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
     font-size: 15px !important;
     letter-spacing: 0 !important;
 }
@@ -106,7 +108,7 @@ body {
 }
 
 .gradio-container {
-    max-width: none !important;
+    max-width: 100% !important;
     padding: 0 !important;
     --body-background-fill: var(--surface);
     --body-text-color: var(--ink);
@@ -436,16 +438,16 @@ button.secondary {
 .dashboard-table td {
     border-bottom: 1px solid var(--line);
     font-size: 14px;
-    padding: 13px 18px;
+    padding: 16px 18px;
     text-align: left;
     vertical-align: middle;
 }
 
 .dashboard-table th {
-    color: #31413D;
+    color: var(--muted);
     font-size: 13px;
-    font-weight: 650;
-    background: #FBFCFC;
+    font-weight: 500;
+    background: transparent;
 }
 
 .dashboard-table tr:last-child td {
@@ -485,7 +487,7 @@ button.secondary {
 }
 
 .confidence-fill {
-    background: var(--sage);
+    background: var(--pine);
     border-radius: inherit;
     display: block;
     height: 100%;
@@ -895,12 +897,18 @@ def _sample_dashboard_rows_html() -> str:
         needs_review = item["status"] == "Review"
         status_class = "amber" if needs_review else "green"
         confidence_class = "review" if needs_review else ""
-        warning_prefix = "⚠ " if item["warnings"] else ""
+        warning_prefix = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#FFF4DB" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px; margin-top:-2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>' if item["warnings"] else ""
+        file_icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#879994" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px; flex-shrink: 0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
 
         rows.append(
             f"""
             <tr>
-                <td>□ {item["file_name"]}</td>
+                <td>
+                    <div style="display: flex; align-items: center;">
+                        {file_icon}
+                        <span>{item["file_name"]}</span>
+                    </div>
+                </td>
                 <td><span class="badge green">{item["document_type"]}</span></td>
                 <td>{item["date"]}</td>
                 <td>{item["vendor"]}</td>
@@ -912,8 +920,12 @@ def _sample_dashboard_rows_html() -> str:
                         <span class="confidence-track"><span class="confidence-fill {confidence_class}" style="width: {item["confidence"]}%"></span></span>
                     </div>
                 </td>
-                <td>{warning_prefix}{item["warnings"]}</td>
-                <td>›</td>
+                <td>
+                    <div style="display: flex; align-items: center;">
+                        {warning_prefix}<span>{item["warnings"]}</span>
+                    </div>
+                </td>
+                <td><span style="color: var(--muted); font-weight: 500;">›</span></td>
             </tr>
             """
         )
@@ -931,10 +943,18 @@ def _recent_documents_html(documents: List[ExtractedDocument]) -> str:
         type_label = document.document_type.title() if document.document_type != "unknown" else "Document"
         confidence_width = max(0, min(100, int(document.confidence)))
 
+        warning_prefix = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#FFF4DB" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px; margin-top:-2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>' if warning_count else ""
+        file_icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#879994" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px; flex-shrink: 0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
+
         rows.append(
             f"""
             <tr>
-                <td>□ {escape(document.file_name)}</td>
+                <td>
+                    <div style="display: flex; align-items: center;">
+                        {file_icon}
+                        <span>{escape(document.file_name)}</span>
+                    </div>
+                </td>
                 <td><span class="badge green">{escape(type_label)}</span></td>
                 <td>{escape(document.date or "—")}</td>
                 <td>{escape(document.vendor or "—")}</td>
@@ -946,8 +966,12 @@ def _recent_documents_html(documents: List[ExtractedDocument]) -> str:
                         <span class="confidence-track"><span class="confidence-fill {confidence_class}" style="width: {confidence_width}%"></span></span>
                     </div>
                 </td>
-                <td>{'⚠ ' if warning_count else ''}{warning_count}</td>
-                <td>›</td>
+                <td>
+                    <div style="display: flex; align-items: center;">
+                        {warning_prefix}<span>{warning_count}</span>
+                    </div>
+                </td>
+                <td><span style="color: var(--muted); font-weight: 500;">›</span></td>
             </tr>
             """
         )
@@ -1188,7 +1212,7 @@ def revalidate_edited(document_rows, line_item_rows, current_documents):
     return _tables_and_exports(documents)
 
 
-with gr.Blocks(title="DocuSend") as demo:
+with gr.Blocks(title="DocuSend", fill_width=True) as demo:
     document_state = gr.State([])
 
     with gr.Row(elem_classes=["app-shell"]):
