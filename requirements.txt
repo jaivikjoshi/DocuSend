@@ -3,6 +3,7 @@ pandas>=2.2.0
 pydantic>=2.7.0
 pillow>=10.3.0
 pdfplumber>=0.11.0
+pypdfium2>=4.30.0
 pytesseract>=0.3.10
 python-dateutil>=2.9.0
 opencv-python-headless>=4.10.0
