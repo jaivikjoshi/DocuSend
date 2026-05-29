@@ -1,14 +1,22 @@
 import { useState } from 'react';
 import { Download, FileJson, FileArchive, CheckCircle } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 import styles from './ExportPanel.module.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 async function downloadExport(documents, format) {
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token;
+  if (!token) throw new Error('You must be signed in to export documents.');
+
   const res = await fetch(`${API_URL}/api/export`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ documents, format }),
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ document_ids: documents.map(doc => doc.id), format }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Export failed' }));

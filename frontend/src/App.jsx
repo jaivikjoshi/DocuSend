@@ -8,15 +8,23 @@ export default function App() {
   const [session, setSession] = useState(undefined); // undefined = loading
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    let mounted = true;
+
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 4000)),
+    ]).then(({ data: { session } }) => {
+      if (mounted) setSession(session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (session === undefined) {

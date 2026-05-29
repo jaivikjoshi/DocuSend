@@ -5,6 +5,7 @@ import styles from './UploadZone.module.css';
 import { supabase } from '../lib/supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const STORAGE_BUCKET = 'documents';
 const ALLOWED = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif']);
 
 function getExt(name) {
@@ -36,7 +37,14 @@ function FileRow({ item }) {
   );
 }
 
-export default function UploadZone({ user, documents, processingFiles, setProcessingFiles }) {
+export default function UploadZone({
+  user,
+  documents,
+  processingFiles,
+  setProcessingFiles,
+  onDocumentAccepted,
+  onDocumentUpdate,
+}) {
   const [dragging, setDragging] = useState(false);
   const inputRef  = useRef(null);
 
@@ -45,82 +53,102 @@ export default function UploadZone({ user, documents, processingFiles, setProces
     const valid = Array.from(files).filter(f => ALLOWED.has(getExt(f.name)));
     if (!valid.length) return;
 
-    const items = valid.map(f => ({ name: f.name, status: 'pending', file: f }));
+    const items = valid.map(f => ({ id: crypto.randomUUID(), name: f.name, status: 'pending', file: f }));
     setProcessingFiles(prev => [...items, ...prev]);
 
-    const results = [];
-
     for (const item of items) {
+      let stubDoc = null;
       try {
-        // 1. Upload to Supabase Storage
+        // 1. Insert an idempotent processing row before uploading.
         setProcessingFiles(prev =>
-          prev.map(p => p.name === item.name ? { ...p, status: 'uploading' } : p)
+          prev.map(p => p.id === item.id ? { ...p, status: 'uploading' } : p)
         );
-        const fileExt = getExt(item.name);
-        const fileName = `${crypto.randomUUID()}${fileExt}`;
-        const storagePath = `${user.id}/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('document-receipts')
-          .upload(storagePath, item.file);
-
-        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-        // 2. Insert stub row into DB
-        setProcessingFiles(prev =>
-          prev.map(p => p.name === item.name ? { ...p, status: 'parsing', path: storagePath } : p)
-        );
-        const { data: stubDoc, error: stubError } = await supabase
+        const { data: insertedStub, error: stubError } = await supabase
           .from('documents')
           .insert({
             user_id: user.id,
             file_name: item.file.name,
             file_size: item.file.size,
             status: 'processing',
-            storage_path: storagePath,
           })
           .select()
           .single();
         if (stubError) throw new Error(`DB Error: ${stubError.message}`);
+        stubDoc = insertedStub;
+        onDocumentAccepted?.(stubDoc);
 
-        // 3. Dispatch Async Process
-        const formData = new FormData();
-        formData.append('file', item.file);
-        formData.append('document_id', stubDoc.id);
+        // 2. Upload once to private Supabase Storage.
+        const fileExt = getExt(item.name);
+        const fileName = `${crypto.randomUUID()}${fileExt}`;
+        const storagePath = `${user.id}/${stubDoc.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, item.file, { contentType: item.file.type || undefined });
 
+        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+        const { data: updatedStub, error: pathError } = await supabase
+          .from('documents')
+          .update({ storage_path: storagePath })
+          .eq('id', stubDoc.id)
+          .select()
+          .single();
+        if (pathError) throw new Error(`DB Error: ${pathError.message}`);
+        stubDoc = updatedStub;
+        onDocumentUpdate?.(stubDoc);
+
+        // 3. Dispatch async processing by storage path. The backend downloads
+        // the private object with this user's JWT and verifies row ownership.
+        setProcessingFiles(prev =>
+          prev.map(p => p.id === item.id ? { ...p, status: 'parsing', documentId: stubDoc.id, path: storagePath } : p)
+        );
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
 
         const res = await fetch(`${API_URL}/api/process_async`, { 
           method: 'POST', 
-          body: formData,
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ document_id: stubDoc.id, storage_path: storagePath }),
         });
         
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
           throw new Error(err.detail ?? `HTTP ${res.status}`);
         }
-        
-        // Done with dispatch. The Realtime subscription in DashboardPage 
-        // will update the table when backend finishes.
+
+        pollDocument(stubDoc.id, onDocumentUpdate).catch(() => {});
       } catch (e) {
+        if (stubDoc?.id) {
+          await supabase
+            .from('documents')
+            .update({ status: 'failed', warnings: [e.message] })
+            .eq('id', stubDoc.id);
+        }
         setProcessingFiles(prev =>
-          prev.map(p => p.name === item.name ? { ...p, status: 'error', error: e.message } : p)
+          prev.map(p => p.id === item.id ? { ...p, status: 'error', error: e.message } : p)
         );
       }
     }
-  }, [user, setProcessingFiles]);
+  }, [user, setProcessingFiles, onDocumentAccepted, onDocumentUpdate]);
 
   // Effect: Watch global documents array to mark processingFiles as "done"
   useEffect(() => {
     setProcessingFiles(prev => prev.map(p => {
       if (p.status !== 'done' && p.status !== 'error') {
-        const finishedDoc = documents.find(d => d.file_name === p.name && (d.status === 'processed' || d.status === 'failed'));
+        const finishedDoc = documents.find(d =>
+          (p.documentId ? d.id === p.documentId : d.file_name === p.name)
+          && (d.status === 'processed' || d.status === 'review' || d.status === 'failed')
+        );
         if (finishedDoc) {
-          return { ...p, status: finishedDoc.status === 'processed' ? 'done' : 'error', error: finishedDoc.status === 'failed' ? 'Failed in backend' : undefined };
+          return {
+            ...p,
+            status: finishedDoc.status === 'failed' ? 'error' : 'done',
+            error: finishedDoc.status === 'failed' ? 'Failed in backend' : undefined,
+          };
         }
       }
       return p;
@@ -187,10 +215,25 @@ export default function UploadZone({ user, documents, processingFiles, setProces
             <span className="badge badge-pine">{processingFiles.length}</span>
           </div>
           <div className={styles.fileListBody}>
-            {processingFiles.map((item, i) => <FileRow key={`${item.name}-${i}`} item={item} />)}
-          </div>
+          {processingFiles.map((item, i) => <FileRow key={item.id ?? `${item.name}-${i}`} item={item} />)}
         </div>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
+}
+
+async function pollDocument(documentId, onDocumentUpdate) {
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, i < 2 ? 800 : 1500));
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*, line_items(*)')
+      .eq('id', documentId)
+      .single();
+    if (error || !data) continue;
+    onDocumentUpdate?.(data);
+    if (['processed', 'review', 'failed'].includes(data.status)) return data;
+  }
+  return null;
 }

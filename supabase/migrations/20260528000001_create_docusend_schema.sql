@@ -27,6 +27,8 @@ create table public.documents (
   user_id         uuid references auth.users(id) on delete cascade,
   file_name       text not null,
   file_type       text,
+  file_size       bigint,
+  storage_path    text,
   document_type   text not null default 'unknown',
   vendor          text,
   document_date   date,
@@ -42,16 +44,16 @@ create table public.documents (
   confidence      numeric(5,2),
   status          text not null default 'review',
   warnings        jsonb not null default '[]'::jsonb,
-  source_mode     text not null default 'authenticated',
+  source_mode     text not null default 'regex',
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
 
   constraint documents_status_check
-    check (status in ('processed', 'review', 'failed')),
+    check (status in ('processing', 'processed', 'review', 'failed')),
   constraint documents_document_type_check
     check (document_type in ('receipt', 'invoice', 'unknown')),
   constraint documents_source_mode_check
-    check (source_mode in ('authenticated', 'guest_import')),
+    check (source_mode in ('gemini', 'regex')),
   constraint documents_subtotal_check
     check (subtotal is null or subtotal >= 0),
   constraint documents_tax_check

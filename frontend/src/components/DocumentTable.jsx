@@ -15,6 +15,14 @@ function docTypeBadge(type) {
   return <span className="badge badge-muted">Unknown</span>;
 }
 
+function statusBadge(status) {
+  const s = status ?? 'review';
+  if (s === 'processed') return <span className="badge badge-success">Processed</span>;
+  if (s === 'processing') return <span className="badge badge-muted">Processing</span>;
+  if (s === 'failed') return <span className="badge badge-error">Failed</span>;
+  return <span className="badge badge-warning">Review</span>;
+}
+
 function fmt(val, prefix = '$') {
   if (val == null) return '—';
   return `${prefix}${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -34,6 +42,7 @@ export default function DocumentTable({ documents, onSelectDocument, selectedDoc
           <thead>
             <tr>
               <th>File</th>
+              <th>Status</th>
               <th>Type</th>
               <th>Vendor</th>
               <th>Date</th>
@@ -60,9 +69,10 @@ export default function DocumentTable({ documents, onSelectDocument, selectedDoc
                   <td className={styles.fileCell}>
                     <span className={styles.fileName}>{doc.file_name}</span>
                   </td>
+                  <td>{statusBadge(doc.status)}</td>
                   <td>{docTypeBadge(doc.document_type)}</td>
                   <td className={styles.vendorCell}>{doc.vendor || '—'}</td>
-                  <td>{doc.date || '—'}</td>
+                  <td>{doc.document_date || doc.date || '—'}</td>
                   <td className={styles.monospace}>{fmt(doc.total)}</td>
                   <td>{confidenceBadge(doc.confidence)}</td>
                   <td>

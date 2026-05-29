@@ -3,6 +3,8 @@ import { X, Save, Edit3, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import styles from './DocumentDetail.module.css';
 
+const STORAGE_BUCKET = 'documents';
+
 function ConfBar({ score }) {
   const p = Math.max(0, Math.min(100, score || 0));
   const color = p >= 75 ? 'var(--conf-high)' : p >= 50 ? 'var(--conf-mid)' : 'var(--conf-low)';
@@ -41,13 +43,16 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft(JSON.parse(JSON.stringify(doc)));
+    setDraft(JSON.parse(JSON.stringify({
+      ...doc,
+      document_date: doc.document_date ?? doc.date ?? '',
+    })));
     setEditing(false);
 
     async function getUrl() {
       if (doc.storage_path) {
         const { data, error } = await supabase.storage
-          .from('document-receipts')
+          .from(STORAGE_BUCKET)
           .createSignedUrl(doc.storage_path, 3600); // 1 hour
         if (!error && data) {
           setFileUrl(data.signedUrl);
@@ -64,7 +69,7 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
     try {
       const docRecord = {
         vendor: draft.vendor,
-        date: draft.date,
+        document_date: draft.document_date || null,
         total: draft.total,
         tax: draft.tax,
       };
@@ -188,8 +193,8 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Date</label>
-                {editing ? <input type="date" className="form-input" value={draft.date || ''} onChange={e => setField('date', e.target.value)} />
-                         : <div className={styles.val}>{draft.date || '—'}</div>}
+                {editing ? <input type="date" className="form-input" value={draft.document_date || ''} onChange={e => setField('document_date', e.target.value)} />
+                         : <div className={styles.val}>{draft.document_date || '—'}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label">Total Amount</label>

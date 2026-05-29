@@ -66,8 +66,13 @@ export default function DashboardPage({ session }) {
     };
   }, [session?.user?.id]);
 
-  const addDocuments = (newDocs) => {
-    setDocuments(prev => [...newDocs, ...prev]);
+  const upsertDocument = (doc) => {
+    setDocuments(prev =>
+      prev.some(d => d.id === doc.id)
+        ? prev.map(d => d.id === doc.id ? { ...d, ...doc } : d)
+        : [doc, ...prev]
+    );
+    setSelectedDoc(prev => prev?.id === doc.id ? { ...prev, ...doc } : prev);
   };
 
   const updateDocument = (updatedDoc) => {
@@ -117,6 +122,8 @@ export default function DashboardPage({ session }) {
                 documents={documents}
                 processingFiles={processingFiles}
                 setProcessingFiles={setProcessingFiles}
+                onDocumentAccepted={upsertDocument}
+                onDocumentUpdate={upsertDocument}
               />
               {documents.length > 0 && (
                 <DocumentTable

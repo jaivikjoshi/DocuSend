@@ -107,7 +107,7 @@ def get_authed_client(access_token: str, refresh_token: str) -> Client:
 def extraction_to_document_row(
     extraction: dict,
     user_id: str,
-    source_mode: str = "authenticated",
+    source_mode: str = "regex",
 ) -> dict:
     """Map the app's extracted document dict to a documents table row.
 
@@ -167,7 +167,7 @@ def insert_document(
     client: Client,
     extraction: dict,
     user_id: str,
-    source_mode: str = "authenticated",
+    source_mode: str = "regex",
 ) -> dict:
     """Insert one document and its line items. Returns the saved document row."""
     doc_row = extraction_to_document_row(extraction, user_id, source_mode)
@@ -338,12 +338,11 @@ class GuestSession:
         """Persist all in-memory guest extractions to Supabase.
 
         Call this after the user signs in and confirms they want to save.
-        Each document is inserted with source_mode='guest_import' so you
-        can distinguish them from documents uploaded while signed in.
+        Each document keeps its parser source mode, defaulting to regex.
         """
         saved = []
         for extraction in self._documents:
-            doc = insert_document(client, extraction, user_id, source_mode="guest_import")
+            doc = insert_document(client, extraction, user_id, source_mode=extraction.get("source_mode", "regex"))
             saved.append(doc)
         self.clear()
         return saved

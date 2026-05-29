@@ -11,8 +11,11 @@ import os
 import sys
 import tempfile
 import shutil
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, List
 
 # ── make sure the repo root is on PYTHONPATH so `src.*` imports work ──────────
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -21,7 +24,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from dotenv import load_dotenv
 load_dotenv(REPO_ROOT / ".env")
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks, Form, Header
+from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -63,12 +66,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 OUTPUT_DIR = REPO_ROOT / "outputs"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif"}
+STORAGE_BUCKET = "documents"
 
 
 @app.get("/api/health")
@@ -143,15 +148,80 @@ async def process_document(file: UploadFile = File(...)):
             pass
 
 
+class ProcessAsyncRequest(BaseModel):
+    document_id: str
+    storage_path: str
+
+
+def _bearer_token(authorization: str | None) -> str:
+    return authorization.replace("Bearer ", "", 1).strip() if authorization else ""
+
+
+def _authed_supabase(token: str) -> Client:
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise RuntimeError("Supabase environment variables are not configured.")
+    client: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    client.postgrest.auth(token)
+    return client
+
+
+def _fetch_owned_document(supabase: Client, document_id: str) -> dict | None:
+    response = (
+        supabase
+        .table("documents")
+        .select("*")
+        .eq("id", document_id)
+        .single()
+        .execute()
+    )
+    return response.data
+
+
+def _download_storage_object(storage_path: str, suffix: str, token: str) -> str:
+    quoted_path = urllib.parse.quote(storage_path, safe="/")
+    url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}/{quoted_path}"
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": SUPABASE_ANON_KEY or "",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=OUTPUT_DIR) as tmp:
+                shutil.copyfileobj(response, tmp)
+                return tmp.name
+    except urllib.error.HTTPError as exc:
+        raise ValueError(f"Storage download failed with HTTP {exc.code}.") from exc
+
+
 def process_worker(
-    tmp_path: str,
-    filename: str,
     document_id: str,
+    storage_path: str,
     jwt_token: str
 ):
-    """Background worker to process the document and update Supabase."""
-    logger.info(f"Starting background processing for {filename} (ID: {document_id})")
+    """Background worker to download a private upload, process it, and update Supabase."""
+    logger.info("Starting background processing for document %s", document_id)
+    tmp_path = None
     try:
+        token = _bearer_token(jwt_token)
+        supabase = _authed_supabase(token)
+        existing = _fetch_owned_document(supabase, document_id)
+        if not existing:
+            raise ValueError("Document not found for this user.")
+        if existing.get("storage_path") != storage_path:
+            raise ValueError("Storage path does not match the document record.")
+        if existing.get("status") in {"processed", "review"} and existing.get("raw_text"):
+            logger.info("Skipping already processed document %s", document_id)
+            return
+
+        filename = existing.get("file_name") or Path(storage_path).name
+        suffix = Path(filename).suffix.lower() or Path(storage_path).suffix.lower()
+        if suffix not in ALLOWED_EXTENSIONS:
+            raise ValueError(f"Unsupported file type '{suffix}'.")
+
+        tmp_path = _download_storage_object(storage_path, suffix, token)
         raw_text, ocr_warnings = extract_text(tmp_path)
         doc: ExtractedDocument
 
@@ -176,17 +246,7 @@ def process_worker(
             doc = _regex_parse(tmp_path, filename, raw_text, ocr_warnings)
 
         # ── Update Supabase ────────────────────────────────────────────
-        logger.info(f"Updating Supabase for document {document_id}")
-        
-        # Initialize client with user's JWT to pass RLS
-        token = jwt_token.replace("Bearer ", "") if jwt_token else ""
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-        
-        # Use auth to bypass RLS safely
-        # Note: If RLS is strict, we might need a service role key. We'll try user JWT first.
-        supabase.postgrest.auth(token)
-        
-        # Convert date safely
+        logger.info("Updating Supabase for document %s", document_id)
         safe_date = None
         if doc.date:
             raw_date = str(doc.date)[:10]
@@ -194,23 +254,29 @@ def process_worker(
                 safe_date = raw_date
 
         update_payload = {
-            "status": "processed",
+            "status": doc.status or "processed",
             "document_type": doc.document_type or "unknown",
             "vendor": doc.vendor or None,
-            "date": safe_date,
+            "document_date": safe_date,
+            "invoice_number": doc.invoice_number,
+            "currency": doc.currency or "USD",
+            "subtotal": float(doc.subtotal) if doc.subtotal is not None else None,
             "total": float(doc.total) if doc.total is not None else None,
             "tax": float(doc.tax) if doc.tax is not None else None,
+            "tip": float(doc.tip) if doc.tip is not None else None,
+            "discount": float(doc.discount) if doc.discount is not None else None,
+            "payment_method": doc.payment_method,
+            "raw_text": doc.raw_text or raw_text,
             "confidence": float(doc.confidence) if doc.confidence is not None else None,
             "warnings": doc.warnings or [],
-            "source_mode": doc.source_mode or "regex"
+            "source_mode": doc.source_mode if doc.source_mode in {"gemini", "regex"} else "regex",
         }
         
-        # Update Document
         res = supabase.table("documents").update(update_payload).eq("id", document_id).execute()
         
-        # Insert Line Items
         if doc.line_items and len(doc.line_items) > 0 and len(res.data) > 0:
             user_id = res.data[0].get("user_id")
+            supabase.table("line_items").delete().eq("document_id", document_id).execute()
             line_items_data = [
                 {
                     "document_id": document_id,
@@ -219,21 +285,19 @@ def process_worker(
                     "quantity": li.quantity,
                     "unit_price": li.unit_price,
                     "total": li.total,
-                    "confidence": li.confidence
+                    "confidence": li.confidence,
+                    "row_index": idx,
                 }
-                for li in doc.line_items
+                for idx, li in enumerate(doc.line_items)
             ]
             supabase.table("line_items").insert(line_items_data).execute()
 
-        logger.info(f"Successfully processed and updated {filename} (ID: {document_id})")
+        logger.info("Successfully processed and updated %s (ID: %s)", filename, document_id)
 
     except Exception as exc:
-        logger.error(f"Worker failed for {filename}: {exc}")
-        # Mark as failed in DB
+        logger.error("Worker failed for document %s: %s", document_id, exc)
         try:
-            token = jwt_token.replace("Bearer ", "") if jwt_token else ""
-            supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-            supabase.postgrest.auth(token)
+            supabase = _authed_supabase(_bearer_token(jwt_token))
             supabase.table("documents").update({
                 "status": "failed",
                 "warnings": [f"Processing failed: {str(exc)}"]
@@ -242,48 +306,36 @@ def process_worker(
             logger.error(f"Failed to update error status for {document_id}: {update_exc}")
 
     finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 @app.post("/api/process_async")
 async def process_document_async(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    document_id: str = Form(...),
+    request: ProcessAsyncRequest,
     authorization: str = Header(None)
 ):
     """
-    Async endpoint. Accepts file, immediately returns 202 Accepted,
-    and runs the extraction in the background.
+    Async endpoint. Accepts a document row + storage path, immediately returns
+    202 Accepted, and runs the extraction in the background.
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
-    suffix = Path(file.filename).suffix.lower()
-    if suffix not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type '{suffix}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
-        )
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=OUTPUT_DIR) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp_path = tmp.name
-
     background_tasks.add_task(
         process_worker,
-        tmp_path=tmp_path,
-        filename=file.filename,
-        document_id=document_id,
-        jwt_token=authorization
+        document_id=request.document_id,
+        storage_path=request.storage_path,
+        jwt_token=authorization,
     )
 
     return JSONResponse(
         status_code=202,
-        content={"message": "Accepted", "document_id": document_id, "status": "processing"}
+        content={"message": "Accepted", "document_id": request.document_id, "status": "processing"}
     )
 
 
@@ -307,23 +359,32 @@ def _regex_parse(
 
 
 class ExportRequest(BaseModel):
-    documents: List[Dict[str, Any]]
+    document_ids: List[str]
     format: str = "csv_zip"
 
 
 @app.post("/api/export")
-async def export_documents(request: ExportRequest):
-    if not request.documents:
+async def export_documents(request: ExportRequest, authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    if not request.document_ids:
         raise HTTPException(status_code=400, detail="No documents provided for export.")
     if request.format not in ("json", "csv_zip"):
         raise HTTPException(status_code=400, detail="format must be 'json' or 'csv_zip'.")
 
-    docs: List[ExtractedDocument] = []
-    for raw in request.documents:
-        try:
-            docs.append(ExtractedDocument(**raw))
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail=f"Invalid document data: {exc}") from exc
+    supabase = _authed_supabase(_bearer_token(authorization))
+    response = (
+        supabase
+        .table("documents")
+        .select("*, line_items(*)")
+        .in_("id", request.document_ids)
+        .execute()
+    )
+    rows = response.data or []
+    if len(rows) != len(set(request.document_ids)):
+        raise HTTPException(status_code=404, detail="One or more documents were not found for this user.")
+
+    docs = [_document_row_to_extracted(row) for row in rows]
 
     json_path, zip_path = write_export_files(docs)
 
@@ -331,3 +392,40 @@ async def export_documents(request: ExportRequest):
         return FileResponse(path=json_path, media_type="application/json", filename=Path(json_path).name)
     else:
         return FileResponse(path=zip_path, media_type="application/zip", filename=Path(zip_path).name)
+
+
+def _document_row_to_extracted(row: dict) -> ExtractedDocument:
+    line_items = sorted(row.get("line_items") or [], key=lambda li: li.get("row_index") or 0)
+    return ExtractedDocument(
+        file_name=row.get("file_name") or "document",
+        status=row.get("status") or "processed",
+        document_type=row.get("document_type") or "unknown",
+        vendor=row.get("vendor") or "",
+        date=str(row.get("document_date") or ""),
+        invoice_number=row.get("invoice_number"),
+        currency=row.get("currency") or "USD",
+        subtotal=_num(row.get("subtotal")),
+        tax=_num(row.get("tax")),
+        tip=_num(row.get("tip")),
+        discount=_num(row.get("discount")),
+        total=_num(row.get("total")),
+        payment_method=row.get("payment_method"),
+        raw_text=row.get("raw_text") or "",
+        confidence=_num(row.get("confidence")) or 0.0,
+        warnings=row.get("warnings") or [],
+        source_mode=row.get("source_mode") or "regex",
+        line_items=[
+            {
+                "description": item.get("description") or "",
+                "quantity": _num(item.get("quantity")),
+                "unit_price": _num(item.get("unit_price")),
+                "total": _num(item.get("total")),
+                "confidence": _num(item.get("confidence")) or 0.0,
+            }
+            for item in line_items
+        ],
+    )
+
+
+def _num(value: Any) -> float | None:
+    return float(value) if value is not None else None
