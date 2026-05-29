@@ -37,9 +37,33 @@ export default function DashboardPage({ session }) {
       }
     }
     
+    let channel;
     if (session?.user?.id) {
       loadDocuments();
+
+      // Realtime listener for async processing updates
+      channel = supabase.channel('documents-channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'documents', filter: `user_id=eq.${session.user.id}` },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              setDocuments(prev => prev.some(d => d.id === payload.new.id) ? prev : [payload.new, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+              setDocuments(prev => prev.map(d => d.id === payload.new.id ? { ...d, ...payload.new } : d));
+              setSelectedDoc(prev => prev?.id === payload.new.id ? { ...prev, ...payload.new } : prev);
+            } else if (payload.eventType === 'DELETE') {
+              setDocuments(prev => prev.filter(d => d.id !== payload.old.id));
+              setSelectedDoc(prev => prev?.id === payload.old.id ? null : prev);
+            }
+          }
+        )
+        .subscribe();
     }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [session?.user?.id]);
 
   const addDocuments = (newDocs) => {
@@ -90,7 +114,7 @@ export default function DashboardPage({ session }) {
             <div className="page-body">
               <UploadZone
                 user={session.user}
-                onDocumentsProcessed={addDocuments}
+                documents={documents}
                 processingFiles={processingFiles}
                 setProcessingFiles={setProcessingFiles}
               />

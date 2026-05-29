@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, XCircle } from 'lucide-react';
 import styles from './UploadZone.module.css';
 
@@ -14,7 +14,8 @@ function getExt(name) {
 function FileRow({ item }) {
   const statusIcon = {
     pending:    <div className="spinner" />,
-    processing: <div className="spinner" />,
+    uploading:  <div className="spinner" />,
+    parsing:    <div className="spinner" style={{ borderColor: 'rgba(255, 255, 255, 0.2)', borderTopColor: 'var(--accent)' }} />,
     done:       <CheckCircle size={16} style={{ color: 'var(--conf-high)' }} />,
     error:      <XCircle    size={16} style={{ color: 'var(--error)' }} />,
   }[item.status];
@@ -28,14 +29,14 @@ function FileRow({ item }) {
         item.status === 'error' ? 'badge-error'   : 'badge-muted'
       } ${styles.status}`}>
         {statusIcon}
-        {item.status === 'done' ? 'Done' : item.status === 'error' ? 'Error' : 'Processing…'}
+        {item.status === 'done' ? 'Done' : item.status === 'error' ? 'Error' : item.status === 'uploading' ? 'Uploading…' : item.status === 'parsing' ? 'Parsing in Background…' : 'Pending…'}
       </span>
       {item.error && <span className={styles.errorMsg}>{item.error}</span>}
     </div>
   );
 }
 
-export default function UploadZone({ user, onDocumentsProcessed, processingFiles, setProcessingFiles }) {
+export default function UploadZone({ user, documents, processingFiles, setProcessingFiles }) {
   const [dragging, setDragging] = useState(false);
   const inputRef  = useRef(null);
 
@@ -50,12 +51,11 @@ export default function UploadZone({ user, onDocumentsProcessed, processingFiles
     const results = [];
 
     for (const item of items) {
-      setProcessingFiles(prev =>
-        prev.map(p => p.name === item.name ? { ...p, status: 'processing' } : p)
-      );
-
       try {
         // 1. Upload to Supabase Storage
+        setProcessingFiles(prev =>
+          prev.map(p => p.name === item.name ? { ...p, status: 'uploading' } : p)
+        );
         const fileExt = getExt(item.name);
         const fileName = `${crypto.randomUUID()}${fileExt}`;
         const storagePath = `${user.id}/${fileName}`;
@@ -66,78 +66,66 @@ export default function UploadZone({ user, onDocumentsProcessed, processingFiles
 
         if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-        // 2. Process via Backend OCR
-        const formData = new FormData();
-        formData.append('file', item.file);
-
-        const res = await fetch(`${API_URL}/api/process`, { method: 'POST', body: formData });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
-          throw new Error(err.detail ?? `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        console.log("Response from /api/process:", data);
-
-        // 3. Save to Supabase DB (Documents)
-        // Sanitize date — Postgres `date` type rejects empty strings
-        const rawDate = data.date ? data.date.slice(0, 10) : null;
-        const safeDate = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
-
-        const { data: insertedDoc, error: docError } = await supabase
+        // 2. Insert stub row into DB
+        setProcessingFiles(prev =>
+          prev.map(p => p.name === item.name ? { ...p, status: 'parsing', path: storagePath } : p)
+        );
+        const { data: stubDoc, error: stubError } = await supabase
           .from('documents')
           .insert({
             user_id: user.id,
             file_name: item.file.name,
             file_size: item.file.size,
-            status: 'processed',
-            document_type: data.document_type || 'unknown',
-            vendor: data.vendor || null,
-            date: safeDate,
-            total: data.total ?? null,
-            tax: data.tax ?? null,
-            confidence: data.confidence ?? null,
+            status: 'processing',
             storage_path: storagePath,
-            warnings: data.warnings || [],
-            source_mode: data.source_mode || 'regex',
           })
           .select()
           .single();
+        if (stubError) throw new Error(`DB Error: ${stubError.message}`);
 
-        if (docError) throw new Error(`Database error: ${docError.message}`);
+        // 3. Dispatch Async Process
+        const formData = new FormData();
+        formData.append('file', item.file);
+        formData.append('document_id', stubDoc.id);
 
-        // 4. Save to Supabase DB (Line Items)
-        if (data.line_items && data.line_items.length > 0) {
-          const lineItems = data.line_items.map(li => ({
-            document_id: insertedDoc.id,
-            user_id: user.id,
-            description: li.description,
-            quantity: li.quantity,
-            unit_price: li.unit_price,
-            total: li.total,
-            confidence: li.confidence
-          }));
-          
-          const { error: lineItemError } = await supabase
-            .from('line_items')
-            .insert(lineItems);
-            
-          if (lineItemError) throw new Error(`Line item error: ${lineItemError.message}`);
-          insertedDoc.line_items = lineItems;
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+        const res = await fetch(`${API_URL}/api/process_async`, { 
+          method: 'POST', 
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+          throw new Error(err.detail ?? `HTTP ${res.status}`);
         }
-
-        results.push(insertedDoc);
-        setProcessingFiles(prev =>
-          prev.map(p => p.name === item.name ? { ...p, status: 'done' } : p)
-        );
+        
+        // Done with dispatch. The Realtime subscription in DashboardPage 
+        // will update the table when backend finishes.
       } catch (e) {
         setProcessingFiles(prev =>
           prev.map(p => p.name === item.name ? { ...p, status: 'error', error: e.message } : p)
         );
       }
     }
+  }, [user, setProcessingFiles]);
 
-    if (results.length > 0) onDocumentsProcessed(results);
-  }, [user, onDocumentsProcessed, setProcessingFiles]);
+  // Effect: Watch global documents array to mark processingFiles as "done"
+  useEffect(() => {
+    setProcessingFiles(prev => prev.map(p => {
+      if (p.status !== 'done' && p.status !== 'error') {
+        const finishedDoc = documents.find(d => d.file_name === p.name && (d.status === 'processed' || d.status === 'failed'));
+        if (finishedDoc) {
+          return { ...p, status: finishedDoc.status === 'processed' ? 'done' : 'error', error: finishedDoc.status === 'failed' ? 'Failed in backend' : undefined };
+        }
+      }
+      return p;
+    }));
+  }, [documents, setProcessingFiles]);
 
   const onDrop = (e) => {
     e.preventDefault();
