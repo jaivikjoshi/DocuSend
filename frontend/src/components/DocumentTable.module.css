@@ -1,0 +1,64 @@
+.wrap { overflow: hidden; }
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+}
+.title { font-size: var(--text-sm); font-weight: 700; color: var(--ink-2); }
+
+.tableWrap { overflow-x: auto; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.table thead tr {
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+}
+.table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.row {
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.row:hover { background: var(--soft); }
+.row:focus-visible { outline: 2px solid var(--sage) inset; }
+.rowSelected { background: var(--mint-lt) !important; }
+.rowSelected td { border-bottom-color: var(--mint); }
+
+.fileCell { max-width: 200px; }
+.fileName {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.vendorCell {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.monospace { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--pine-2); }

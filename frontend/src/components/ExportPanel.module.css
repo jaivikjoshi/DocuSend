@@ -1,0 +1,52 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 640px;
+}
+
+.summary {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.exportCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  transition: box-shadow var(--dur) var(--ease);
+}
+.exportCard:hover { box-shadow: var(--shadow); }
+
+.exportIcon {
+  width: 52px; height: 52px;
+  background: var(--soft);
+  border-radius: var(--radius-lg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--sage);
+  flex-shrink: 0;
+}
+
+.exportInfo {
+  flex: 1;
+  min-width: 0;
+}
+.exportInfo h3 {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.exportInfo p {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.5;
+}
+.exportError {
+  font-size: var(--text-xs);
+  color: var(--error) !important;
+  margin-top: 4px !important;
+}
+
+.exportBtn { flex-shrink: 0; }

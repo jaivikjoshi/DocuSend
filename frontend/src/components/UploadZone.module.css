@@ -1,0 +1,100 @@
+.zone {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-10) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+  text-align: center;
+  user-select: none;
+}
+.zone:hover {
+  border-color: var(--sage);
+  background: var(--mint-lt);
+}
+.zone:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+}
+.zoneDragging {
+  border-color: var(--sage) !important;
+  background: var(--mint-lt) !important;
+  box-shadow: 0 0 0 4px rgba(64,138,113,.15);
+  transform: scale(1.01);
+}
+
+.iconWrap {
+  width: 56px; height: 56px;
+  background: var(--soft);
+  border-radius: var(--radius-lg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--sage);
+  transition: all var(--dur) var(--ease);
+}
+.iconWrapActive {
+  background: var(--mint);
+  color: var(--pine-2);
+  transform: scale(1.1);
+}
+
+.zoneText { display: flex; flex-direction: column; gap: 4px; }
+.zoneTitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.zoneSub {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.formats { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
+
+/* File list */
+.fileList {
+  margin-top: var(--space-4);
+  overflow: hidden;
+}
+.fileListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.fileListBody { padding: var(--space-3); display: flex; flex-direction: column; gap: 4px; }
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--soft);
+  animation: fadeUp .2s ease both;
+}
+.fileName {
+  flex: 1;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+.status { flex-shrink: 0; }
+.errorMsg {
+  font-size: var(--text-xs);
+  color: var(--error);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
