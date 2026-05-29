@@ -16,6 +16,24 @@ function ConfBar({ score }) {
   );
 }
 
+function SourceBadge({ sourceMode }) {
+  const isGemini = sourceMode === 'gemini';
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '3px 10px', borderRadius: '999px', fontSize: '11px',
+      fontWeight: 700, letterSpacing: '0.04em',
+      background: isGemini
+        ? 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)'
+        : 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+      color: '#fff',
+      boxShadow: isGemini ? '0 0 8px rgba(124,58,237,0.4)' : 'none',
+    }}>
+      {isGemini ? '✦ AI Parsed' : '⚙ Regex'}
+    </span>
+  );
+}
+
 export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
@@ -153,8 +171,11 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
         {/* Right Side: Form */}
         <div style={{ padding: '24px', overflowY: 'auto' }}>
           <div className={styles.section}>
-            <h3 className={styles.sectionTitle}>Confidence Score</h3>
-            <ConfBar score={draft.confidence} />
+            <h3 className={styles.sectionTitle}>Extraction Quality</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <ConfBar score={draft.confidence} />
+              <SourceBadge sourceMode={draft.source_mode} />
+            </div>
           </div>
 
           <div className={styles.section}>

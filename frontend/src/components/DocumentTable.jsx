@@ -39,6 +39,7 @@ export default function DocumentTable({ documents, onSelectDocument, selectedDoc
               <th>Date</th>
               <th>Total</th>
               <th>Confidence</th>
+              <th>Source</th>
               <th>Warnings</th>
             </tr>
           </thead>
@@ -64,6 +65,11 @@ export default function DocumentTable({ documents, onSelectDocument, selectedDoc
                   <td>{doc.date || '—'}</td>
                   <td className={styles.monospace}>{fmt(doc.total)}</td>
                   <td>{confidenceBadge(doc.confidence)}</td>
+                  <td>
+                    {doc.source_mode === 'gemini'
+                      ? <span className="badge" style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', color: '#fff', boxShadow: '0 0 6px rgba(124,58,237,0.35)' }}>✦ AI</span>
+                      : <span className="badge badge-muted">⚙ Regex</span>}
+                  </td>
                   <td>
                     {warnings.length > 0
                       ? <span className="badge badge-warning" title={warnings.join('\n')}>

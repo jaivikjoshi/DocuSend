@@ -91,7 +91,8 @@ export default function UploadZone({ user, onDocumentsProcessed, processingFiles
             tax: data.tax,
             confidence: data.confidence,
             storage_path: storagePath,
-            warnings: data.warnings || []
+            warnings: data.warnings || [],
+            source_mode: data.source_mode || 'regex',
           })
           .select()
           .single();
