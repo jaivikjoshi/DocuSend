@@ -29,6 +29,7 @@ class ExtractedDocument(BaseModel):
     raw_text: str = ""
     confidence: float = 0.0
     warnings: List[str] = Field(default_factory=list)
+    source_mode: str = "regex"  # "gemini" | "regex"
 
 
 EDITABLE_DOCUMENT_COLUMNS = [
