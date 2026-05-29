@@ -76,20 +76,26 @@ export default function UploadZone({ user, onDocumentsProcessed, processingFiles
           throw new Error(err.detail ?? `HTTP ${res.status}`);
         }
         const data = await res.json();
+        console.log("Response from /api/process:", data);
 
         // 3. Save to Supabase DB (Documents)
+        // Sanitize date — Postgres `date` type rejects empty strings
+        const rawDate = data.date ? data.date.slice(0, 10) : null;
+        const safeDate = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+
         const { data: insertedDoc, error: docError } = await supabase
           .from('documents')
           .insert({
             user_id: user.id,
             file_name: item.file.name,
             file_size: item.file.size,
-            document_type: data.document_type,
-            vendor: data.vendor,
-            date: data.date,
-            total: data.total,
-            tax: data.tax,
-            confidence: data.confidence,
+            status: 'processed',
+            document_type: data.document_type || 'unknown',
+            vendor: data.vendor || null,
+            date: safeDate,
+            total: data.total ?? null,
+            tax: data.tax ?? null,
+            confidence: data.confidence ?? null,
             storage_path: storagePath,
             warnings: data.warnings || [],
             source_mode: data.source_mode || 'regex',
