@@ -1334,3 +1334,17 @@ with gr.Blocks(title="DocuSend", fill_width=True) as demo:
 
 if __name__ == "__main__":
     demo.launch(css=DOCUSEND_CSS)
+        handle_signup,
+        inputs=[signup_email, signup_password],
+        outputs=[signup_msg],
+    )
+
+    logout_button.click(
+        handle_logout,
+        inputs=[],
+        outputs=[auth_container, app_container, login_password, signup_password],
+    )
+
+
+if __name__ == "__main__":
+    demo.launch(css=DOCUSEND_CSS)
