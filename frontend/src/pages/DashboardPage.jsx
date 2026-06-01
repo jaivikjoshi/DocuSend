@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Sidebar from '../components/Sidebar';
 import UploadZone from '../components/UploadZone';
+import DashboardStats from '../components/DashboardStats';
 import DocumentTable from '../components/DocumentTable';
 import DocumentDetail from '../components/DocumentDetail';
 import ExportPanel from '../components/ExportPanel';
@@ -138,6 +139,7 @@ export default function DashboardPage({ session, isGuest = false, onExitGuest })
                 </div>
               )}
               {loadError && <div className="alert alert-error">{loadError}</div>}
+              <DashboardStats documents={documents} />
               <UploadZone
                 user={session.user}
                 isGuest={isGuest}
