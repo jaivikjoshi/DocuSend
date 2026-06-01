@@ -67,6 +67,31 @@
   padding: 8px 0;
 }
 
+.reviewField {
+  padding: var(--space-3);
+  border: 1px solid rgba(185,122,5,.28);
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+}
+
+.warningList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid rgba(185,122,5,.25);
+  border-radius: var(--radius);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
+.warningList div {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
 /* Items */
 .itemsList { display: flex; flex-direction: column; gap: var(--space-2); }
 .itemRow {

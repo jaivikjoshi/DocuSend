@@ -7,13 +7,16 @@ Tier-2: Uses Gemini Flash for structured parsing when available,
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
 import sys
+import time
 import tempfile
 import shutil
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List
 
@@ -32,9 +35,10 @@ from supabase import create_client, Client
 
 from src.ocr import extract_text
 from src.parser import parse_document
-from src.export import write_export_files
+from src.export import write_accounting_csv, write_export_files
 from src.schema import ExtractedDocument
 from src.utils import is_supported_file
+from src.validation import validate_document
 
 # Tier-2: import Gemini parser (won't raise even if key is missing)
 from src.gemini_parser import parse_document_gemini, GEMINI_AVAILABLE
@@ -44,6 +48,10 @@ logger = logging.getLogger(__name__)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+PROCESSING_MAX_RETRIES = int(os.environ.get("PROCESSING_MAX_RETRIES", "3"))
+PROCESSING_WORKER_ENABLED = os.environ.get("PROCESSING_WORKER_ENABLED", "true").lower() != "false"
+PROCESSING_WORKER_INTERVAL_SECONDS = float(os.environ.get("PROCESSING_WORKER_INTERVAL_SECONDS", "5"))
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     logger.warning("Supabase environment variables missing. Database updates will fail.")
@@ -74,6 +82,13 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif"}
 STORAGE_BUCKET = "documents"
+PROCESSING_PARSER_VERSION = "ocr-gemini-v2"
+RETRYABLE_STATUSES = {"queued", "processing", "failed"}
+_worker_task: asyncio.Task | None = None
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @app.get("/api/health")
@@ -84,7 +99,68 @@ async def health():
         "version": "2.0.0",
         "gemini_available": GEMINI_AVAILABLE,
         "parser": "gemini" if GEMINI_AVAILABLE else "regex",
+        "durable_worker": bool(SUPABASE_SERVICE_ROLE_KEY and PROCESSING_WORKER_ENABLED),
     }
+
+
+@app.on_event("startup")
+async def start_queue_worker():
+    global _worker_task
+    if not PROCESSING_WORKER_ENABLED or not SUPABASE_SERVICE_ROLE_KEY:
+        return
+    _worker_task = asyncio.create_task(_queue_worker_loop())
+
+
+@app.on_event("shutdown")
+async def stop_queue_worker():
+    if _worker_task:
+        _worker_task.cancel()
+
+
+async def _queue_worker_loop():
+    logger.info("Durable processing queue worker started.")
+    while True:
+        try:
+            await asyncio.to_thread(_drain_one_queued_document)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Queue worker iteration failed: %s", exc)
+        await asyncio.sleep(PROCESSING_WORKER_INTERVAL_SECONDS)
+
+
+def _drain_one_queued_document():
+    supabase = _service_supabase()
+    if not supabase:
+        return
+    response = (
+        supabase
+        .table("documents")
+        .select("*")
+        .eq("status", "queued")
+        .lt("retry_count", PROCESSING_MAX_RETRIES)
+        .order("created_at", desc=False)
+        .limit(1)
+        .execute()
+    )
+    rows = response.data or []
+    if not rows:
+        return
+    row = rows[0]
+    storage_path = row.get("storage_path")
+    if not storage_path:
+        _row_update(supabase, row["id"], {
+            "status": "failed",
+            "last_error": "Document does not have a stored source file.",
+            "warnings": ["Processing failed: Document does not have a stored source file."],
+        })
+        return
+    process_worker(
+        document_id=row["id"],
+        storage_path=storage_path,
+        jwt_token=f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        force=True,
+    )
 
 
 @app.post("/api/process")
@@ -151,6 +227,7 @@ async def process_document(file: UploadFile = File(...)):
 class ProcessAsyncRequest(BaseModel):
     document_id: str
     storage_path: str
+    force: bool = False
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -163,6 +240,12 @@ def _authed_supabase(token: str) -> Client:
     client: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
     client.postgrest.auth(token)
     return client
+
+
+def _service_supabase() -> Client | None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
 def _fetch_owned_document(supabase: Client, document_id: str) -> dict | None:
@@ -196,32 +279,87 @@ def _download_storage_object(storage_path: str, suffix: str, token: str) -> str:
         raise ValueError(f"Storage download failed with HTTP {exc.code}.") from exc
 
 
+def _row_update(client: Client, document_id: str, payload: dict) -> dict | None:
+    response = (
+        client
+        .table("documents")
+        .update(payload)
+        .eq("id", document_id)
+        .execute()
+    )
+    rows = response.data or []
+    return rows[0] if rows else None
+
+
+def _queue_document(
+    document_id: str,
+    storage_path: str,
+    jwt_token: str,
+    *,
+    force: bool = False,
+) -> dict:
+    token = _bearer_token(jwt_token)
+    supabase = _authed_supabase(token)
+    existing = _fetch_owned_document(supabase, document_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Document not found for this user.")
+    if existing.get("storage_path") != storage_path:
+        raise HTTPException(status_code=409, detail="Storage path does not match the document record.")
+    if existing.get("status") in {"processed", "review"} and existing.get("raw_text") and not force:
+        return existing
+
+    payload = {
+        "status": "queued",
+        "last_error": None,
+        "processing_started_at": None,
+        "processed_at": None,
+    }
+    if force:
+        payload["retry_count"] = 0
+    queued = _row_update(supabase, document_id, payload)
+    return queued or existing
+
+
 def process_worker(
     document_id: str,
     storage_path: str,
-    jwt_token: str
+    jwt_token: str,
+    *,
+    force: bool = False,
 ):
-    """Background worker to download a private upload, process it, and update Supabase."""
+    """Download a private upload, process it, and update Supabase.
+
+    The document row is the durable job record. This function may be called
+    immediately after enqueueing or later by a polling worker.
+    """
     logger.info("Starting background processing for document %s", document_id)
     tmp_path = None
+    token = _bearer_token(jwt_token)
+    supabase = _service_supabase() or _authed_supabase(token)
+    storage_token = SUPABASE_SERVICE_ROLE_KEY or token
+    started_at = time.monotonic()
     try:
-        token = _bearer_token(jwt_token)
-        supabase = _authed_supabase(token)
         existing = _fetch_owned_document(supabase, document_id)
         if not existing:
             raise ValueError("Document not found for this user.")
         if existing.get("storage_path") != storage_path:
             raise ValueError("Storage path does not match the document record.")
-        if existing.get("status") in {"processed", "review"} and existing.get("raw_text"):
+        if existing.get("status") in {"processed", "review"} and existing.get("raw_text") and not force:
             logger.info("Skipping already processed document %s", document_id)
             return
+
+        _row_update(supabase, document_id, {
+            "status": "processing",
+            "last_error": None,
+            "processing_started_at": _utc_now_iso(),
+        })
 
         filename = existing.get("file_name") or Path(storage_path).name
         suffix = Path(filename).suffix.lower() or Path(storage_path).suffix.lower()
         if suffix not in ALLOWED_EXTENSIONS:
             raise ValueError(f"Unsupported file type '{suffix}'.")
 
-        tmp_path = _download_storage_object(storage_path, suffix, token)
+        tmp_path = _download_storage_object(storage_path, suffix, storage_token)
         raw_text, ocr_warnings = extract_text(tmp_path)
         doc: ExtractedDocument
 
@@ -238,6 +376,7 @@ def process_worker(
                     doc.confidence = min(base_confidence + 15, 99.0)
 
                 doc.file_name = filename
+                doc = validate_document(doc)
                 logger.info(f"Gemini extraction succeeded for {filename}")
             except Exception as exc:
                 logger.warning(f"Gemini failed for {filename}: {exc} — falling back to regex")
@@ -270,6 +409,10 @@ def process_worker(
             "confidence": float(doc.confidence) if doc.confidence is not None else None,
             "warnings": doc.warnings or [],
             "source_mode": doc.source_mode if doc.source_mode in {"gemini", "regex"} else "regex",
+            "processed_at": _utc_now_iso(),
+            "processing_duration_ms": int((time.monotonic() - started_at) * 1000),
+            "parser_version": PROCESSING_PARSER_VERSION,
+            "last_error": None,
         }
         
         res = supabase.table("documents").update(update_payload).eq("id", document_id).execute()
@@ -297,10 +440,16 @@ def process_worker(
     except Exception as exc:
         logger.error("Worker failed for document %s: %s", document_id, exc)
         try:
-            supabase = _authed_supabase(_bearer_token(jwt_token))
+            supabase = _service_supabase() or _authed_supabase(_bearer_token(jwt_token))
+            existing = _fetch_owned_document(supabase, document_id) or {}
+            retry_count = int(existing.get("retry_count") or 0) + 1
+            status = "queued" if SUPABASE_SERVICE_ROLE_KEY and retry_count < PROCESSING_MAX_RETRIES else "failed"
             supabase.table("documents").update({
-                "status": "failed",
-                "warnings": [f"Processing failed: {str(exc)}"]
+                "status": status,
+                "retry_count": retry_count,
+                "last_error": str(exc),
+                "warnings": [f"Processing failed: {str(exc)}"],
+                "processing_duration_ms": int((time.monotonic() - started_at) * 1000),
             }).eq("id", document_id).execute()
         except Exception as update_exc:
             logger.error(f"Failed to update error status for {document_id}: {update_exc}")
@@ -326,16 +475,62 @@ async def process_document_async(
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
+    queued = _queue_document(
+        request.document_id,
+        request.storage_path,
+        authorization,
+        force=request.force,
+    )
+
     background_tasks.add_task(
         process_worker,
         document_id=request.document_id,
         storage_path=request.storage_path,
         jwt_token=authorization,
+        force=request.force,
     )
 
     return JSONResponse(
         status_code=202,
-        content={"message": "Accepted", "document_id": request.document_id, "status": "processing"}
+        content={
+            "message": "Queued",
+            "document_id": request.document_id,
+            "status": queued.get("status", "queued"),
+        }
+    )
+
+
+@app.post("/api/documents/{document_id}/retry")
+async def retry_document(
+    document_id: str,
+    background_tasks: BackgroundTasks,
+    authorization: str = Header(None),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    token = _bearer_token(authorization)
+    supabase = _authed_supabase(token)
+    existing = _fetch_owned_document(supabase, document_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Document not found for this user.")
+    storage_path = existing.get("storage_path")
+    if not storage_path:
+        raise HTTPException(status_code=409, detail="Document does not have a stored source file.")
+    if existing.get("status") not in RETRYABLE_STATUSES and not existing.get("raw_text"):
+        raise HTTPException(status_code=409, detail="Document is not retryable.")
+
+    queued = _queue_document(document_id, storage_path, authorization, force=True)
+    background_tasks.add_task(
+        process_worker,
+        document_id=document_id,
+        storage_path=storage_path,
+        jwt_token=authorization,
+        force=True,
+    )
+    return JSONResponse(
+        status_code=202,
+        content={"message": "Queued for retry", "document_id": document_id, "status": queued.get("status", "queued")},
     )
 
 
@@ -349,6 +544,7 @@ def _regex_parse(
     doc = parse_document(tmp_path, raw_text, ocr_warnings)
     doc.file_name = filename
     doc.source_mode = "regex"
+    doc = validate_document(doc)
 
     populated = sum(
         1 for field in [doc.vendor, doc.date, doc.total, doc.document_type]
@@ -369,8 +565,8 @@ async def export_documents(request: ExportRequest, authorization: str = Header(N
         raise HTTPException(status_code=401, detail="Missing Authorization header")
     if not request.document_ids:
         raise HTTPException(status_code=400, detail="No documents provided for export.")
-    if request.format not in ("json", "csv_zip"):
-        raise HTTPException(status_code=400, detail="format must be 'json' or 'csv_zip'.")
+    if request.format not in ("json", "csv_zip", "accounting_csv"):
+        raise HTTPException(status_code=400, detail="format must be 'json', 'csv_zip', or 'accounting_csv'.")
 
     supabase = _authed_supabase(_bearer_token(authorization))
     response = (
@@ -386,11 +582,14 @@ async def export_documents(request: ExportRequest, authorization: str = Header(N
 
     docs = [_document_row_to_extracted(row) for row in rows]
 
-    json_path, zip_path = write_export_files(docs)
-
     if request.format == "json":
+        json_path, _zip_path = write_export_files(docs)
         return FileResponse(path=json_path, media_type="application/json", filename=Path(json_path).name)
+    elif request.format == "accounting_csv":
+        csv_path = write_accounting_csv(docs)
+        return FileResponse(path=csv_path, media_type="text/csv", filename=Path(csv_path).name)
     else:
+        _json_path, zip_path = write_export_files(docs)
         return FileResponse(path=zip_path, media_type="application/zip", filename=Path(zip_path).name)
 
 

@@ -6,7 +6,7 @@ import DocumentTable from '../components/DocumentTable';
 import DocumentDetail from '../components/DocumentDetail';
 import ExportPanel from '../components/ExportPanel';
 
-export const VIEWS = {
+const VIEWS = {
   DASHBOARD: 'dashboard',
   DOCUMENTS: 'documents',
   EXPORT:    'export',
@@ -18,10 +18,12 @@ export default function DashboardPage({ session }) {
   const [selectedDoc,     setSelectedDoc]     = useState(null);
   const [processingFiles, setProcessingFiles] = useState([]);
   const [loadingDocs,     setLoadingDocs]     = useState(true);
+  const [loadError,       setLoadError]       = useState('');
 
   useEffect(() => {
     async function loadDocuments() {
       setLoadingDocs(true);
+      setLoadError('');
       try {
         const { data, error } = await supabase
           .from('documents')
@@ -32,6 +34,7 @@ export default function DashboardPage({ session }) {
         setDocuments(data || []);
       } catch (err) {
         console.error("Error loading documents:", err);
+        setLoadError(err.message || 'Failed to load documents.');
       } finally {
         setLoadingDocs(false);
       }
@@ -117,6 +120,7 @@ export default function DashboardPage({ session }) {
               <p>Upload receipts and invoices to extract data automatically.</p>
             </div>
             <div className="page-body">
+              {loadError && <div className="alert alert-error">{loadError}</div>}
               <UploadZone
                 user={session.user}
                 documents={documents}
@@ -143,6 +147,7 @@ export default function DashboardPage({ session }) {
               <p>{documents.length} document{documents.length !== 1 ? 's' : ''} processed this session.</p>
             </div>
             <div className="page-body">
+              {loadError && <div className="alert alert-error">{loadError}</div>}
               {loadingDocs ? (
                 <div className="card card-padded empty-state"><div className="spinner"></div><p>Loading documents...</p></div>
               ) : documents.length === 0 ? (
@@ -181,6 +186,7 @@ export default function DashboardPage({ session }) {
               <p>Download your extracted data as JSON or CSV.</p>
             </div>
             <div className="page-body">
+              {loadError && <div className="alert alert-error">{loadError}</div>}
               <ExportPanel documents={documents} />
             </div>
           </>
