@@ -50,3 +50,45 @@
 }
 
 .exportBtn { flex-shrink: 0; }
+
+.templateCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.templateMeta {
+  margin-top: 4px !important;
+  font-size: var(--text-xs) !important;
+  color: var(--pine-2) !important;
+  font-weight: 600;
+}
+
+.templateActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.templateUpload {
+  position: relative;
+}
+
+@media (max-width: 720px) {
+  .exportCard,
+  .templateCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .templateActions {
+    width: 100%;
+  }
+
+  .templateActions > * {
+    flex: 1;
+    justify-content: center;
+  }
+}

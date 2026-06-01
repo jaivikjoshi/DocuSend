@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, FileJson, FileArchive, CheckCircle, Sheet } from 'lucide-react';
+import { Download, FileJson, FileArchive, CheckCircle, Sheet, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import styles from './ExportPanel.module.css';
 
@@ -17,6 +17,79 @@ function saveBlob(blob, filename) {
 function csvValue(value) {
   const text = value == null ? '' : String(value);
   return `"${text.replaceAll('"', '""')}"`;
+}
+
+function parseCsvHeader(text) {
+  const firstLine = text.split(/\r?\n/).find(line => line.trim().length > 0) || '';
+  const columns = [];
+  let current = '';
+  let quoted = false;
+
+  for (let i = 0; i < firstLine.length; i += 1) {
+    const char = firstLine[i];
+    const next = firstLine[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      current += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      columns.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  columns.push(current.trim());
+  return columns.filter(Boolean);
+}
+
+function normalizeColumn(column) {
+  return column.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function templateValue(doc, column) {
+  const key = normalizeColumn(column);
+  const warnings = (doc.warnings || []).join(' | ');
+  const values = {
+    date: doc.date || doc.document_date || '',
+    documentdate: doc.date || doc.document_date || '',
+    vendor: doc.vendor || '',
+    payee: doc.vendor || '',
+    merchant: doc.vendor || '',
+    supplier: doc.vendor || '',
+    description: doc.invoice_number || doc.file_name || '',
+    memo: doc.invoice_number || doc.file_name || '',
+    invoicenumber: doc.invoice_number || '',
+    invoice: doc.invoice_number || '',
+    receiptfile: doc.file_name || '',
+    filename: doc.file_name || '',
+    file: doc.file_name || '',
+    amount: doc.total ?? '',
+    total: doc.total ?? '',
+    totalamount: doc.total ?? '',
+    tax: doc.tax ?? '',
+    subtotal: doc.subtotal ?? '',
+    tip: doc.tip ?? '',
+    discount: doc.discount ?? '',
+    currency: doc.currency || 'USD',
+    category: doc.document_type === 'unknown' ? 'Uncategorized' : 'Office Supplies',
+    documenttype: doc.document_type || '',
+    type: doc.document_type || '',
+    paymentmethod: doc.payment_method || '',
+    payment: doc.payment_method || '',
+    status: doc.status || '',
+    confidence: doc.confidence ?? '',
+    reviewrequired: doc.status === 'review' || warnings ? 'Yes' : 'No',
+    warnings,
+    notes: doc.review_notes || '',
+  };
+  return values[key] ?? '';
+}
+
+function templateCsv(documents, columns) {
+  const rows = documents.map(doc => columns.map(column => templateValue(doc, column)));
+  return [columns, ...rows].map(row => row.map(csvValue).join(',')).join('\n');
 }
 
 function guestAccountingCsv(documents) {
@@ -123,6 +196,76 @@ function ExportCard({ id, icon: Icon, title, description, format, documents, dis
   );
 }
 
+function TemplateExport({ documents }) {
+  const [template, setTemplate] = useState(null);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  const handleTemplate = async (event) => {
+    setError('');
+    setDone(false);
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setError('Upload a CSV template with the column headers you want.');
+      return;
+    }
+    const text = await file.text();
+    const columns = parseCsvHeader(text);
+    if (!columns.length) {
+      setError('Template must include at least one header column.');
+      return;
+    }
+    setTemplate({ name: file.name, columns });
+  };
+
+  const handleExport = () => {
+    if (!template) {
+      setError('Upload a CSV template first.');
+      return;
+    }
+    saveBlob(
+      new Blob([templateCsv(documents, template.columns)], { type: 'text/csv' }),
+      `docusend-template-${template.name.replace(/\.csv$/i, '')}.csv`,
+    );
+    setDone(true);
+    setTimeout(() => setDone(false), 3000);
+  };
+
+  return (
+    <div className={`card ${styles.templateCard}`}>
+      <div className={styles.exportIcon}>
+        <Upload size={28} />
+      </div>
+      <div className={styles.exportInfo}>
+        <h3>Template CSV Export</h3>
+        <p>Upload a CSV template and DocuSend will export documents using that exact header order.</p>
+        {template && (
+          <p className={styles.templateMeta}>
+            {template.name} · {template.columns.length} column{template.columns.length !== 1 ? 's' : ''}
+          </p>
+        )}
+        {error && <p className={styles.exportError}>{error}</p>}
+      </div>
+      <div className={styles.templateActions}>
+        <label className={`btn btn-secondary ${styles.templateUpload}`}>
+          <Upload size={15} /> Upload
+          <input type="file" accept=".csv,text/csv" onChange={handleTemplate} className="sr-only" />
+        </label>
+        <button
+          id="btn-export-template"
+          className={`btn btn-primary ${styles.exportBtn}`}
+          onClick={handleExport}
+          disabled={!documents.length || !template}
+        >
+          {done ? <><CheckCircle size={15} /> Downloaded!</> : <><Download size={15} /> Export</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ExportPanel({ documents, isGuest = false }) {
   const hasDocuments = documents.length > 0;
 
@@ -168,6 +311,8 @@ export default function ExportPanel({ documents, isGuest = false }) {
             disabled={!hasDocuments}
             isGuest={isGuest}
           />
+
+          <TemplateExport documents={documents} />
 
           <ExportCard
             id="btn-export-json"
