@@ -45,7 +45,7 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
   useEffect(() => {
     setDraft(JSON.parse(JSON.stringify({
       ...doc,
-      document_date: doc.document_date ?? doc.date ?? '',
+      date: doc.date ?? doc.document_date ?? '',
     })));
     setEditing(false);
 
@@ -69,7 +69,7 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
     try {
       const docRecord = {
         vendor: draft.vendor,
-        document_date: draft.document_date || null,
+        date: draft.date || null,
         total: draft.total,
         tax: draft.tax,
       };
@@ -193,8 +193,8 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Date</label>
-                {editing ? <input type="date" className="form-input" value={draft.document_date || ''} onChange={e => setField('document_date', e.target.value)} />
-                         : <div className={styles.val}>{draft.document_date || '—'}</div>}
+                {editing ? <input type="date" className="form-input" value={draft.date || ''} onChange={e => setField('date', e.target.value)} />
+                         : <div className={styles.val}>{draft.date || draft.document_date || '—'}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label">Total Amount</label>

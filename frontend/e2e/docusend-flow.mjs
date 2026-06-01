@@ -179,7 +179,7 @@ async function installMocks(page) {
 
 async function waitForServer(url, child) {
   const started = Date.now();
-  while (Date.now() - started < 30000) {
+  while (Date.now() - started < 90000) {
     if (child.exitCode !== null) throw new Error('Vite dev server exited early.');
     try {
       const res = await fetch(url);

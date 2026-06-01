@@ -137,22 +137,23 @@ export default function UploadZone({
 
   // Effect: Watch global documents array to mark processingFiles as "done"
   useEffect(() => {
-    setProcessingFiles(prev => prev.map(p => {
-      if (p.status !== 'done' && p.status !== 'error') {
-        const finishedDoc = documents.find(d =>
-          (p.documentId ? d.id === p.documentId : d.file_name === p.name)
-          && (d.status === 'processed' || d.status === 'review' || d.status === 'failed')
-        );
-        if (finishedDoc) {
-          return {
-            ...p,
-            status: finishedDoc.status === 'failed' ? 'error' : 'done',
-            error: finishedDoc.status === 'failed' ? 'Failed in backend' : undefined,
-          };
+    setProcessingFiles(prev => {
+      let changed = false;
+      const next = prev.map(p => {
+        if (p.status !== 'done' && p.status !== 'error') {
+          const finishedDoc = documents.find(d => 
+            (p.documentId ? d.id === p.documentId : d.file_name === p.name) && 
+            (d.status === 'processed' || d.status === 'failed' || d.status === 'review')
+          );
+          if (finishedDoc) {
+            changed = true;
+            return { ...p, status: finishedDoc.status === 'failed' ? 'error' : 'done', error: finishedDoc.status === 'failed' ? 'Failed in backend' : undefined };
+          }
         }
-      }
-      return p;
-    }));
+        return p;
+      });
+      return changed ? next : prev;
+    });
   }, [documents, setProcessingFiles]);
 
   const onDrop = (e) => {

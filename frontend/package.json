@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:clean": "node -e \"fs.rmSync('node_modules/.vite', { recursive: true, force: true })\" && vite --force",
     "build": "vite build",
     "lint": "eslint .",
     "test:e2e": "node e2e/docusend-flow.mjs",
