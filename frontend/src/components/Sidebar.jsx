@@ -14,13 +14,17 @@ const NAV = [
   { id: VIEWS.EXPORT,    label: 'Export',     icon: Download },
 ];
 
-export default function Sidebar({ user, activeView, onViewChange, documentCount }) {
+export default function Sidebar({ user, activeView, onViewChange, documentCount, isGuest = false, onExitGuest }) {
   const handleLogout = async () => {
+    if (isGuest) {
+      onExitGuest?.();
+      return;
+    }
     await supabase.auth.signOut();
   };
 
-  const initials = user?.email?.slice(0, 2).toUpperCase() ?? '??';
-  const emailDisplay = user?.email ?? '';
+  const initials = isGuest ? 'GU' : user?.email?.slice(0, 2).toUpperCase() ?? '??';
+  const emailDisplay = isGuest ? 'Local trial session' : user?.email ?? '';
 
   return (
     <aside className={styles.sidebar}>
@@ -60,7 +64,7 @@ export default function Sidebar({ user, activeView, onViewChange, documentCount 
       <div className={styles.userSection}>
         <div className={styles.avatar}>{initials}</div>
         <div className={styles.userInfo}>
-          <span className={styles.userName}>{user?.user_metadata?.full_name || 'User'}</span>
+          <span className={styles.userName}>{isGuest ? 'Guest Mode' : user?.user_metadata?.full_name || 'User'}</span>
           <span className={styles.userEmail}>{emailDisplay}</span>
         </div>
       </div>
@@ -71,7 +75,7 @@ export default function Sidebar({ user, activeView, onViewChange, documentCount 
         onClick={handleLogout}
       >
         <LogOut size={15} />
-        Sign Out
+        {isGuest ? 'Exit Guest' : 'Sign Out'}
       </button>
     </aside>
   );

@@ -39,6 +39,7 @@ function FileRow({ item }) {
 
 export default function UploadZone({
   user,
+  isGuest = false,
   documents,
   processingFiles,
   setProcessingFiles,
@@ -59,6 +60,42 @@ export default function UploadZone({
     for (const item of items) {
       let stubDoc = null;
       try {
+        if (isGuest) {
+          setProcessingFiles(prev =>
+            prev.map(p => p.id === item.id ? { ...p, status: 'parsing' } : p)
+          );
+
+          const body = new FormData();
+          body.append('file', item.file);
+          const res = await fetch(`${API_URL}/api/process`, {
+            method: 'POST',
+            body,
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Processing failed' }));
+            throw new Error(err.detail ?? `HTTP ${res.status}`);
+          }
+
+          const parsed = await res.json();
+          const guestDoc = {
+            ...parsed,
+            id: item.id,
+            user_id: 'guest',
+            file_name: item.file.name,
+            file_size: item.file.size,
+            status: parsed.status || 'review',
+            source_mode: parsed.source_mode || 'regex',
+            created_at: new Date().toISOString(),
+            object_url: URL.createObjectURL(item.file),
+            is_guest: true,
+          };
+          onDocumentAccepted?.(guestDoc);
+          setProcessingFiles(prev =>
+            prev.map(p => p.id === item.id ? { ...p, status: 'done', documentId: guestDoc.id } : p)
+          );
+          continue;
+        }
+
         // 1. Insert an idempotent processing row before uploading.
         setProcessingFiles(prev =>
           prev.map(p => p.id === item.id ? { ...p, status: 'uploading' } : p)
@@ -133,7 +170,7 @@ export default function UploadZone({
         );
       }
     }
-  }, [user, setProcessingFiles, onDocumentAccepted, onDocumentUpdate]);
+  }, [isGuest, user, setProcessingFiles, onDocumentAccepted, onDocumentUpdate]);
 
   // Effect: Watch global documents array to mark processingFiles as "done"
   useEffect(() => {

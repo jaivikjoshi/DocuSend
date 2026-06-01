@@ -40,6 +40,10 @@
 .inputWithIcon { padding-left:38px !important; }
 .submitBtn { margin-top:4px; background:linear-gradient(135deg,#285A48,#408A71) !important; box-shadow:0 4px 18px rgba(40,90,72,.45) !important; }
 .submitBtn:hover:not(:disabled) { box-shadow:0 6px 24px rgba(40,90,72,.55) !important; transform:translateY(-2px) !important; }
+.guestDivider { display:flex; align-items:center; gap:12px; margin:18px 0 12px; color:#5a706a; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; }
+.guestDivider::before, .guestDivider::after { content:""; flex:1; height:1px; background:#ddeae3; }
+.guestBtn { justify-content:center; }
+.guestNote { margin-top:8px; text-align:center; color:#5a706a; font-size:12px; line-height:1.4; }
 .footer { text-align:center; font-size:13px; color:#5a706a; margin-top:20px; }
 .link { background:none; border:none; cursor:pointer; color:#285A48; font-weight:600; font-size:inherit; font-family:inherit; padding:0; }
 .link:hover { text-decoration:underline; }

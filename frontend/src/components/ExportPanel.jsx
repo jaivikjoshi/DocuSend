@@ -5,7 +5,56 @@ import styles from './ExportPanel.module.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
-async function downloadExport(documents, format) {
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvValue(value) {
+  const text = value == null ? '' : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function guestAccountingCsv(documents) {
+  const columns = ['Date', 'Payee', 'Description', 'Category', 'Amount', 'Tax', 'Currency', 'Receipt File', 'Review Required', 'Warnings'];
+  const rows = documents.map(doc => [
+    doc.date || doc.document_date || '',
+    doc.vendor || '',
+    doc.invoice_number || doc.file_name || '',
+    doc.document_type === 'unknown' ? 'Uncategorized' : 'Office Supplies',
+    doc.total ?? '',
+    doc.tax ?? '',
+    doc.currency || 'USD',
+    doc.file_name || '',
+    doc.status === 'review' || (doc.warnings || []).length > 0 ? 'Yes' : 'No',
+    (doc.warnings || []).join(' | '),
+  ]);
+  return [columns, ...rows].map(row => row.map(csvValue).join(',')).join('\n');
+}
+
+async function downloadExport(documents, format, isGuest) {
+  if (isGuest) {
+    if (format === 'json') {
+      saveBlob(
+        new Blob([JSON.stringify(documents, null, 2)], { type: 'application/json' }),
+        'docusend-guest-export.json',
+      );
+      return;
+    }
+    if (format === 'accounting_csv') {
+      saveBlob(
+        new Blob([guestAccountingCsv(documents)], { type: 'text/csv' }),
+        'docusend-guest-accounting.csv',
+      );
+      return;
+    }
+    throw new Error('Sign in to export the normalized CSV ZIP.');
+  }
+
   const session = await supabase.auth.getSession();
   const token = session.data.session?.access_token;
   if (!token) throw new Error('You must be signed in to export documents.');
@@ -27,15 +76,10 @@ async function downloadExport(documents, format) {
   const nameMatch   = disposition.match(/filename="?([^"]+)"?/);
   const filename    = nameMatch?.[1] ?? (format === 'json' ? 'export.json' : 'export.zip');
 
-  const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveBlob(blob, filename);
 }
 
-function ExportCard({ id, icon: Icon, title, description, format, documents, disabled }) {
+function ExportCard({ id, icon: Icon, title, description, format, documents, disabled, isGuest }) {
   const [loading, setLoading] = useState(false);
   const [done,    setDone]    = useState(false);
   const [error,   setError]   = useState('');
@@ -45,7 +89,7 @@ function ExportCard({ id, icon: Icon, title, description, format, documents, dis
     setDone(false);
     setLoading(true);
     try {
-      await downloadExport(documents, format);
+      await downloadExport(documents, format, isGuest);
       setDone(true);
       setTimeout(() => setDone(false), 3000);
     } catch (e) {
@@ -79,7 +123,7 @@ function ExportCard({ id, icon: Icon, title, description, format, documents, dis
   );
 }
 
-export default function ExportPanel({ documents }) {
+export default function ExportPanel({ documents, isGuest = false }) {
   const hasDocuments = documents.length > 0;
 
   return (
@@ -101,15 +145,18 @@ export default function ExportPanel({ documents }) {
             {documents.length} document{documents.length !== 1 ? 's' : ''} ready to export.
           </div>
 
-          <ExportCard
-            id="btn-export-csv"
-            icon={FileArchive}
-            title="CSV Export (ZIP)"
-            description="Two CSV files — one for document summaries, one for line items — zipped together. Best for Excel, Google Sheets, or accounting software."
-            format="csv_zip"
-            documents={documents}
-            disabled={!hasDocuments}
-          />
+          {!isGuest && (
+            <ExportCard
+              id="btn-export-csv"
+              icon={FileArchive}
+              title="CSV Export (ZIP)"
+              description="Two CSV files — one for document summaries, one for line items — zipped together. Best for Excel, Google Sheets, or accounting software."
+              format="csv_zip"
+              documents={documents}
+              disabled={!hasDocuments}
+              isGuest={isGuest}
+            />
+          )}
 
           <ExportCard
             id="btn-export-accounting"
@@ -119,6 +166,7 @@ export default function ExportPanel({ documents }) {
             format="accounting_csv"
             documents={documents}
             disabled={!hasDocuments}
+            isGuest={isGuest}
           />
 
           <ExportCard
@@ -129,6 +177,7 @@ export default function ExportPanel({ documents }) {
             format="json"
             documents={documents}
             disabled={!hasDocuments}
+            isGuest={isGuest}
           />
         </>
       )}
