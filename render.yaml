@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: docusend-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.backend
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: PROCESSING_MAX_RETRIES
+        value: "3"
+      - key: PROCESSING_WORKER_ENABLED
+        value: "true"
+      - key: PROCESSING_WORKER_INTERVAL_SECONDS
+        value: "5"

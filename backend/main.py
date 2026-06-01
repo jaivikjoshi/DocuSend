@@ -52,6 +52,11 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 PROCESSING_MAX_RETRIES = int(os.environ.get("PROCESSING_MAX_RETRIES", "3"))
 PROCESSING_WORKER_ENABLED = os.environ.get("PROCESSING_WORKER_ENABLED", "true").lower() != "false"
 PROCESSING_WORKER_INTERVAL_SECONDS = float(os.environ.get("PROCESSING_WORKER_INTERVAL_SECONDS", "5"))
+FRONTEND_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     logger.warning("Supabase environment variables missing. Database updates will fail.")
@@ -70,6 +75,7 @@ app.add_middleware(
         "http://127.0.0.1:5175",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        *FRONTEND_ORIGINS,
     ],
     allow_credentials=True,
     allow_methods=["*"],
