@@ -18,6 +18,7 @@ function docTypeBadge(type) {
 function statusBadge(status) {
   const s = status ?? 'review';
   if (s === 'processed') return <span className="badge badge-success">Processed</span>;
+  if (s === 'queued') return <span className="badge badge-muted">Queued</span>;
   if (s === 'processing') return <span className="badge badge-muted">Processing</span>;
   if (s === 'failed') return <span className="badge badge-error">Failed</span>;
   return <span className="badge badge-warning">Review</span>;

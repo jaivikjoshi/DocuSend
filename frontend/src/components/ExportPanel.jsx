@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, FileJson, FileArchive, CheckCircle } from 'lucide-react';
+import { Download, FileJson, FileArchive, CheckCircle, Sheet } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import styles from './ExportPanel.module.css';
 
@@ -107,6 +107,16 @@ export default function ExportPanel({ documents }) {
             title="CSV Export (ZIP)"
             description="Two CSV files — one for document summaries, one for line items — zipped together. Best for Excel, Google Sheets, or accounting software."
             format="csv_zip"
+            documents={documents}
+            disabled={!hasDocuments}
+          />
+
+          <ExportCard
+            id="btn-export-accounting"
+            icon={Sheet}
+            title="Accounting CSV"
+            description="A flat expense-register format with date, payee, amount, tax, category, review flag, and receipt filename. Best for QuickBooks-style imports or month-end expense reports."
+            format="accounting_csv"
             documents={documents}
             disabled={!hasDocuments}
           />

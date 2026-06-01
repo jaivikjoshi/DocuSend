@@ -69,7 +69,7 @@ export default function UploadZone({
             user_id: user.id,
             file_name: item.file.name,
             file_size: item.file.size,
-            status: 'processing',
+            status: 'queued',
           })
           .select()
           .single();

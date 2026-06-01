@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Edit3, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, RefreshCw, X, Save, Edit3, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import styles from './DocumentDetail.module.css';
 
 const STORAGE_BUCKET = 'documents';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 function ConfBar({ score }) {
   const p = Math.max(0, Math.min(100, score || 0));
@@ -36,18 +37,28 @@ function SourceBadge({ sourceMode }) {
   );
 }
 
+function nullableNumber(value) {
+  if (value === '' || value == null || Number.isNaN(value)) return null;
+  return Number(value);
+}
+
 export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [fileUrl, setFileUrl] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState('');
 
   useEffect(() => {
+    // The detail pane intentionally resets its editable draft when a new document is selected.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(JSON.parse(JSON.stringify({
       ...doc,
       date: doc.date ?? doc.document_date ?? '',
     })));
     setEditing(false);
+    setReviewNotes(doc.review_notes || '');
 
     async function getUrl() {
       if (doc.storage_path) {
@@ -70,8 +81,16 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
       const docRecord = {
         vendor: draft.vendor,
         date: draft.date || null,
-        total: draft.total,
-        tax: draft.tax,
+        document_type: draft.document_type || 'unknown',
+        invoice_number: draft.invoice_number || null,
+        currency: draft.currency || 'USD',
+        subtotal: nullableNumber(draft.subtotal),
+        total: nullableNumber(draft.total),
+        tax: nullableNumber(draft.tax),
+        tip: nullableNumber(draft.tip),
+        discount: nullableNumber(draft.discount),
+        payment_method: draft.payment_method || null,
+        review_notes: reviewNotes || null,
       };
       
       const { error: docError } = await supabase
@@ -85,26 +104,78 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
       await supabase.from('line_items').delete().eq('document_id', draft.id);
       
       if (draft.line_items && draft.line_items.length > 0) {
-        const lineItems = draft.line_items.map(li => ({
+        const lineItems = draft.line_items.map((li, idx) => ({
           document_id: draft.id,
           user_id: draft.user_id,
           description: li.description,
-          quantity: li.quantity,
-          unit_price: li.unit_price,
-          total: li.total,
-          confidence: li.confidence
+          quantity: nullableNumber(li.quantity),
+          unit_price: nullableNumber(li.unit_price),
+          total: nullableNumber(li.total),
+          confidence: nullableNumber(li.confidence),
+          row_index: idx,
         }));
         const { error: lineError } = await supabase.from('line_items').insert(lineItems);
         if (lineError) throw lineError;
       }
 
-      onUpdate(draft);
+      onUpdate({ ...draft, ...docRecord, review_notes: reviewNotes || null });
       setEditing(false);
     } catch (err) {
       console.error("Save error:", err);
       alert("Failed to save document.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleMarkReviewed = async () => {
+    setSaving(true);
+    try {
+      const reviewedAt = new Date().toISOString();
+      const reviewedDoc = {
+        status: 'processed',
+        reviewed_at: reviewedAt,
+        reviewed_by: draft.user_id,
+        review_notes: reviewNotes || null,
+      };
+      const { error } = await supabase
+        .from('documents')
+        .update(reviewedDoc)
+        .eq('id', draft.id);
+      if (error) throw error;
+      const next = { ...draft, ...reviewedDoc };
+      setDraft(next);
+      onUpdate(next);
+    } catch (err) {
+      console.error("Review error:", err);
+      alert("Failed to mark document reviewed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('You must be signed in to retry processing.');
+      const res = await fetch(`${API_URL}/api/documents/${draft.id}/retry`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Retry failed' }));
+        throw new Error(err.detail ?? 'Retry failed');
+      }
+      const next = { ...draft, status: 'queued', last_error: null };
+      setDraft(next);
+      onUpdate(next);
+    } catch (err) {
+      console.error("Retry error:", err);
+      alert(err.message || "Failed to retry processing.");
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -146,6 +217,11 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
         </div>
         <div className={styles.actions}>
           <button className="btn btn-ghost btn-sm" style={{ color: 'var(--error)' }} onClick={handleDelete}><Trash2 size={14}/> Delete</button>
+          {(draft.status === 'failed' || draft.status === 'queued') && (
+            <button className="btn btn-secondary btn-sm" onClick={handleRetry} disabled={retrying}>
+              <RefreshCw size={14}/> {retrying ? 'Retrying...' : 'Retry'}
+            </button>
+          )}
           {editing ? (
             <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}><Save size={14}/> {saving ? 'Saving...' : 'Save'}</button>
           ) : (
@@ -180,23 +256,33 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <ConfBar score={draft.confidence} />
               <SourceBadge sourceMode={draft.source_mode} />
+              {draft.status === 'review' && <span className="badge badge-warning"><AlertTriangle size={11} /> Needs Review</span>}
+              {draft.reviewed_at && <span className="badge badge-success"><CheckCircle size={11} /> Reviewed</span>}
             </div>
+            {draft.last_error && <div className="alert alert-error"><AlertTriangle size={16} /> {draft.last_error}</div>}
+            {Array.isArray(draft.warnings) && draft.warnings.length > 0 && (
+              <div className={styles.warningList}>
+                {draft.warnings.map((warning, idx) => (
+                  <div key={`${warning}-${idx}`}><AlertTriangle size={13} /> {warning}</div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>Extracted Data</h3>
             <div className={styles.grid}>
-              <div className="form-group">
+              <div className={`form-group ${!draft.vendor ? styles.reviewField : ''}`}>
                 <label className="form-label">Vendor</label>
                 {editing ? <input className="form-input" value={draft.vendor || ''} onChange={e => setField('vendor', e.target.value)} />
                          : <div className={styles.val}>{draft.vendor || '—'}</div>}
               </div>
-              <div className="form-group">
+              <div className={`form-group ${!draft.date && !draft.document_date ? styles.reviewField : ''}`}>
                 <label className="form-label">Date</label>
                 {editing ? <input type="date" className="form-input" value={draft.date || ''} onChange={e => setField('date', e.target.value)} />
                          : <div className={styles.val}>{draft.date || draft.document_date || '—'}</div>}
               </div>
-              <div className="form-group">
+              <div className={`form-group ${draft.total == null ? styles.reviewField : ''}`}>
                 <label className="form-label">Total Amount</label>
                 {editing ? <input type="number" step="0.01" className="form-input" value={draft.total || ''} onChange={e => setField('total', parseFloat(e.target.value))} />
                          : <div className={styles.val}>${Number(draft.total || 0).toFixed(2)}</div>}
@@ -206,7 +292,41 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
                 {editing ? <input type="number" step="0.01" className="form-input" value={draft.tax || ''} onChange={e => setField('tax', parseFloat(e.target.value))} />
                          : <div className={styles.val}>${Number(draft.tax || 0).toFixed(2)}</div>}
               </div>
+              <div className="form-group">
+                <label className="form-label">Invoice Number</label>
+                {editing ? <input className="form-input" value={draft.invoice_number || ''} onChange={e => setField('invoice_number', e.target.value)} />
+                         : <div className={styles.val}>{draft.invoice_number || '—'}</div>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Currency</label>
+                {editing ? <input className="form-input" value={draft.currency || 'USD'} maxLength={3} onChange={e => setField('currency', e.target.value.toUpperCase())} />
+                         : <div className={styles.val}>{draft.currency || 'USD'}</div>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Subtotal</label>
+                {editing ? <input type="number" step="0.01" className="form-input" value={draft.subtotal || ''} onChange={e => setField('subtotal', parseFloat(e.target.value))} />
+                         : <div className={styles.val}>${Number(draft.subtotal || 0).toFixed(2)}</div>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Payment Method</label>
+                {editing ? <input className="form-input" value={draft.payment_method || ''} onChange={e => setField('payment_method', e.target.value)} />
+                         : <div className={styles.val}>{draft.payment_method || '—'}</div>}
+              </div>
             </div>
+          </div>
+
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Review Decision</h3>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={reviewNotes}
+              onChange={e => setReviewNotes(e.target.value)}
+              placeholder="Notes about corrections, exceptions, or approval context"
+            />
+            <button className="btn btn-primary btn-sm" onClick={handleMarkReviewed} disabled={saving}>
+              <CheckCircle size={14}/> Mark Reviewed
+            </button>
           </div>
 
           <div className={styles.section}>
