@@ -42,7 +42,7 @@ function nullableNumber(value) {
   return Number(value);
 }
 
-export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
+export default function DocumentDetail({ doc, isGuest = false, onUpdate, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [fileUrl, setFileUrl] = useState(null);
@@ -61,6 +61,10 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
     setReviewNotes(doc.review_notes || '');
 
     async function getUrl() {
+      if (doc.object_url) {
+        setFileUrl(doc.object_url);
+        return;
+      }
       if (doc.storage_path) {
         const { data, error } = await supabase.storage
           .from(STORAGE_BUCKET)
@@ -92,6 +96,19 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
         payment_method: draft.payment_method || null,
         review_notes: reviewNotes || null,
       };
+
+      if (isGuest) {
+        const next = {
+          ...draft,
+          ...docRecord,
+          date: docRecord.date || '',
+          review_notes: reviewNotes || null,
+        };
+        setDraft(next);
+        onUpdate(next);
+        setEditing(false);
+        return;
+      }
       
       const { error: docError } = await supabase
         .from('documents')
@@ -135,9 +152,16 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
       const reviewedDoc = {
         status: 'processed',
         reviewed_at: reviewedAt,
-        reviewed_by: draft.user_id,
+        reviewed_by: isGuest ? null : draft.user_id,
         review_notes: reviewNotes || null,
       };
+      if (isGuest) {
+        const next = { ...draft, ...reviewedDoc };
+        setDraft(next);
+        onUpdate(next);
+        return;
+      }
+
       const { error } = await supabase
         .from('documents')
         .update(reviewedDoc)
@@ -217,7 +241,7 @@ export default function DocumentDetail({ doc, onUpdate, onDelete, onClose }) {
         </div>
         <div className={styles.actions}>
           <button className="btn btn-ghost btn-sm" style={{ color: 'var(--error)' }} onClick={handleDelete}><Trash2 size={14}/> Delete</button>
-          {(draft.status === 'failed' || draft.status === 'queued') && (
+          {!isGuest && (draft.status === 'failed' || draft.status === 'queued') && (
             <button className="btn btn-secondary btn-sm" onClick={handleRetry} disabled={retrying}>
               <RefreshCw size={14}/> {retrying ? 'Retrying...' : 'Retry'}
             </button>

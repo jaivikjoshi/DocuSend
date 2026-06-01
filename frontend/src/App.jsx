@@ -6,6 +6,7 @@ import './index.css';
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = loading
+  const [guestMode, setGuestMode] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -19,6 +20,7 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) setGuestMode(false);
     });
 
     return () => {
@@ -38,5 +40,23 @@ export default function App() {
     );
   }
 
-  return session ? <DashboardPage session={session} /> : <AuthPage />;
+  if (guestMode) {
+    return (
+      <DashboardPage
+        session={{
+          user: {
+            id: 'guest',
+            email: 'guest@local',
+            user_metadata: { full_name: 'Guest Mode' },
+          },
+        }}
+        isGuest
+        onExitGuest={() => setGuestMode(false)}
+      />
+    );
+  }
+
+  return session
+    ? <DashboardPage session={session} />
+    : <AuthPage onGuest={() => setGuestMode(true)} />;
 }

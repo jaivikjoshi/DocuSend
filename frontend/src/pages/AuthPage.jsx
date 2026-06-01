@@ -6,7 +6,7 @@ import styles from './AuthPage.module.css';
 const TAB_LOGIN = 'login';
 const TAB_SIGNUP = 'signup';
 
-export default function AuthPage() {
+export default function AuthPage({ onGuest }) {
   const [tab,      setTab]      = useState(TAB_LOGIN);
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -88,6 +88,11 @@ export default function AuthPage() {
             {loading ? <><span className="spinner" style={{borderTopColor:'#fff'}} /> Processing…</> : <>{tab === TAB_LOGIN ? 'Sign In' : 'Create Account'} <ArrowRight size={16} /></>}
           </button>
         </form>
+        <div className={styles.guestDivider}><span>or</span></div>
+        <button type="button" className={`btn btn-secondary btn-full ${styles.guestBtn}`} onClick={onGuest}>
+          Try Guest Mode
+        </button>
+        <p className={styles.guestNote}>Process sample documents locally without saving history.</p>
         <p className={styles.footer}>
           {tab === TAB_LOGIN
             ? <>Don't have an account? <button className={styles.link} onClick={() => switchTab(TAB_SIGNUP)}>Sign Up →</button></>

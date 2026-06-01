@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import Sidebar from '../components/Sidebar';
 import UploadZone from '../components/UploadZone';
+import DashboardStats from '../components/DashboardStats';
 import DocumentTable from '../components/DocumentTable';
 import DocumentDetail from '../components/DocumentDetail';
 import ExportPanel from '../components/ExportPanel';
@@ -12,7 +13,7 @@ const VIEWS = {
   EXPORT:    'export',
 };
 
-export default function DashboardPage({ session }) {
+export default function DashboardPage({ session, isGuest = false, onExitGuest }) {
   const [view,            setView]            = useState(VIEWS.DASHBOARD);
   const [documents,       setDocuments]       = useState([]);
   const [selectedDoc,     setSelectedDoc]     = useState(null);
@@ -41,7 +42,10 @@ export default function DashboardPage({ session }) {
     }
     
     let channel;
-    if (session?.user?.id) {
+    if (isGuest) {
+      setLoadingDocs(false);
+      setLoadError('');
+    } else if (session?.user?.id) {
       loadDocuments();
 
       // Realtime listener for async processing updates
@@ -67,7 +71,7 @@ export default function DashboardPage({ session }) {
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
-  }, [session?.user?.id]);
+  }, [isGuest, session?.user?.id]);
 
   const upsertDocument = (doc) => {
     setDocuments(prev =>
@@ -86,6 +90,13 @@ export default function DashboardPage({ session }) {
   };
 
   const deleteDocument = async (docId) => {
+    if (isGuest) {
+      setDocuments(prev => prev.filter(d => d.id !== docId));
+      setSelectedDoc(null);
+      setView(VIEWS.DASHBOARD);
+      return;
+    }
+
     try {
       const { error } = await supabase.from('documents').delete().eq('id', docId);
       if (error) throw error;
@@ -107,6 +118,8 @@ export default function DashboardPage({ session }) {
     <div className="app-layout">
       <Sidebar
         user={session.user}
+        isGuest={isGuest}
+        onExitGuest={onExitGuest}
         activeView={view}
         onViewChange={(v) => { setView(v); setSelectedDoc(null); }}
         documentCount={documents.length}
@@ -117,12 +130,19 @@ export default function DashboardPage({ session }) {
           <>
             <div className="page-header animate-fade-up">
               <h1>Dashboard</h1>
-              <p>Upload receipts and invoices to extract data automatically.</p>
+              <p>{isGuest ? 'Try extraction without saving files or creating an account.' : 'Upload receipts and invoices to extract data automatically.'}</p>
             </div>
             <div className="page-body">
+              {isGuest && (
+                <div className="alert alert-warning">
+                  Guest documents stay in this browser session only. Sign in to save history, private file previews, and cloud exports.
+                </div>
+              )}
               {loadError && <div className="alert alert-error">{loadError}</div>}
+              <DashboardStats documents={documents} />
               <UploadZone
                 user={session.user}
+                isGuest={isGuest}
                 documents={documents}
                 processingFiles={processingFiles}
                 setProcessingFiles={setProcessingFiles}
@@ -164,6 +184,7 @@ export default function DashboardPage({ session }) {
               ) : selectedDoc ? (
                 <DocumentDetail
                   doc={selectedDoc}
+                  isGuest={isGuest}
                   onUpdate={updateDocument}
                   onDelete={deleteDocument}
                   onClose={() => setSelectedDoc(null)}
@@ -183,11 +204,11 @@ export default function DashboardPage({ session }) {
           <>
             <div className="page-header animate-fade-up">
               <h1>Export</h1>
-              <p>Download your extracted data as JSON or CSV.</p>
+              <p>{isGuest ? 'Download guest-session data as local JSON or accounting CSV.' : 'Download your extracted data as JSON or CSV.'}</p>
             </div>
             <div className="page-body">
               {loadError && <div className="alert alert-error">{loadError}</div>}
-              <ExportPanel documents={documents} />
+              <ExportPanel documents={documents} isGuest={isGuest} />
             </div>
           </>
         )}
